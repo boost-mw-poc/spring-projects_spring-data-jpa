@@ -18,15 +18,18 @@ package org.springframework.data.jpa.repository.aot.generated;
 import jakarta.persistence.EntityManager;
 
 import java.lang.reflect.Parameter;
+import java.util.regex.Pattern;
 
 import org.apache.commons.logging.Log;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.aot.generate.AotRepositoryConstructorBuilder;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodBuilder;
+import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
 import org.springframework.data.repository.aot.generate.RepositoryContributor;
 import org.springframework.data.repository.config.AotRepositoryContext;
 import org.springframework.javapoet.TypeName;
+import org.springframework.util.StringUtils;
 
 /**
  * @author Christoph Strobl
@@ -43,28 +46,38 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 	}
 
 	@Override
-	protected void customizeDerivedMethod(AotRepositoryMethodBuilder methodBuilder) {
+	protected AotRepositoryMethodBuilder contributeRepositoryMethod(
+		AotRepositoryMethodGenerationContext generationContext) {
 
-		methodBuilder.customize((repositoryInformation, metadata, builder) -> {
+		{
+			Query queryAnnotation = AnnotatedElementUtils.findMergedAnnotation(generationContext.getMethod(), Query.class);
+			if (queryAnnotation != null) {
+				if (StringUtils.hasText(queryAnnotation.value())
+					&& Pattern.compile("[\\?:][#$]\\{.*\\}").matcher(queryAnnotation.value()).find()) {
+					return null;
+				}
+			}
+		}
 
-			Query query = AnnotatedElementUtils.findMergedAnnotation(metadata.getRepositoryMethod(), Query.class);
+		return new AotRepositoryMethodBuilder(generationContext).customize((context, body) -> {
+
+			Query query = AnnotatedElementUtils.findMergedAnnotation(context.getMethod(), Query.class);
 			if (query != null) {
 
-				builder.beginControlFlow("if($L.isDebugEnabled())", metadata.fieldNameOf(Log.class));
-				builder.addStatement("$L.debug(\"invoking generated [$L] method\")", metadata.fieldNameOf(Log.class),
-						metadata.getRepositoryMethod().getName());
-				builder.endControlFlow();
+				body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
-				builder.addStatement("$T query = this.$L.createQuery($S)", jakarta.persistence.Query.class,
-						metadata.fieldNameOf(EntityManager.class), query.value());
+				body.addStatement("$T query = this.$L.createQuery($S)", jakarta.persistence.Query.class,
+						context.fieldNameOf(EntityManager.class), query.value());
 				int i = 1;
-				for (Parameter parameter : metadata.getRepositoryMethod().getParameters()) {
-					builder.addStatement("query.setParameter(" + i + ", " + parameter.getName() + ")");
+				for (Parameter parameter : context.getMethod().getParameters()) {
+					body.addStatement("query.setParameter(" + i + ", " + parameter.getName() + ")");
 					i++;
 				}
-				if (!metadata.returnsVoid()) {
-					builder.addStatement("return ($T) query.getResultList()", metadata.getReturnType());
+				if (!context.returnsVoid()) {
+					body.addStatement("return ($T) query.getResultList()", context.getReturnType());
 				}
+			} else {
+
 			}
 		});
 	}

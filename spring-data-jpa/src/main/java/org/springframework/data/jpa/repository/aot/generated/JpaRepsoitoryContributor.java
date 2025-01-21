@@ -17,14 +17,11 @@ package org.springframework.data.jpa.repository.aot.generated;
 
 import jakarta.persistence.EntityManager;
 
-import java.lang.reflect.Parameter;
 import java.util.regex.Pattern;
 
-import org.apache.commons.logging.Log;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.jpa.projection.CollectionAwareProjectionFactory;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.util.JpaMetamodel;
 import org.springframework.data.repository.aot.generate.AotRepositoryConstructorBuilder;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodBuilder;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
@@ -45,7 +42,6 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 	AotQueryCreator queryCreator;
 	AotMetaModel metaModel;
 
-
 	public JpaRepsoitoryContributor(AotRepositoryContext repositoryContext) {
 		super(repositoryContext);
 
@@ -60,13 +56,13 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 
 	@Override
 	protected AotRepositoryMethodBuilder contributeRepositoryMethod(
-		AotRepositoryMethodGenerationContext generationContext) {
+			AotRepositoryMethodGenerationContext generationContext) {
 
 		{
 			Query queryAnnotation = AnnotatedElementUtils.findMergedAnnotation(generationContext.getMethod(), Query.class);
 			if (queryAnnotation != null) {
 				if (StringUtils.hasText(queryAnnotation.value())
-					&& Pattern.compile("[\\?:][#$]\\{.*\\}").matcher(queryAnnotation.value()).find()) {
+						&& Pattern.compile("[\\?:][#$]\\{.*\\}").matcher(queryAnnotation.value()).find()) {
 					return null;
 				}
 			}
@@ -79,50 +75,49 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 
 				body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
-				body.addStatement("$T query = this.$L.createQuery($S)", jakarta.persistence.Query.class,
-						context.fieldNameOf(EntityManager.class), query.value());
-				int i = 1;
-				for (Parameter parameter : context.getMethod().getParameters()) {
-					body.addStatement("query.setParameter(" + i + ", " + parameter.getName() + ")");
-					i++;
-				}
+				// body.addStatement("$T query = this.$L.createQuery($S)", jakarta.persistence.Query.class,
+				// context.fieldNameOf(EntityManager.class), query.value());
+				// int i = 1;
+				// for (Parameter parameter : context.getMethod().getParameters()) {
+				// body.addStatement("query.setParameter(" + i + ", " + parameter.getName() + ")");
+				// i++;
+				// }
+				body.addCode(
+						JpaCodeBlocks.queryBlockBuilder(context).usingQueryVariableName("query").filter(query.value()).build());
 
-				if(context.returnsSingleValue()) {
+				if (context.returnsSingleValue()) {
 					body.addStatement("return ($T) query.getSingleResultOrNull()", context.getReturnType());
-				} else 	if (!context.returnsVoid()) {
+				} else if (!context.returnsVoid()) {
 					body.addStatement("return ($T) query.getResultList()", context.getReturnType());
 				}
 			} else {
 
 				PartTree partTree = new PartTree(context.getMethod().getName(),
-					context.getRepositoryInformation().getDomainType());
+						context.getRepositoryInformation().getDomainType());
 
 				CollectionAwareProjectionFactory projectionFactory = new CollectionAwareProjectionFactory();
 
 				boolean isProjecting = context.getActualReturnType() != null
-					&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
-					context.getActualReturnType());
+						&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
+								context.getActualReturnType());
 
 				Class<?> actualReturnType = context.getRepositoryInformation().getDomainType();
-                try {
-                    actualReturnType = isProjecting ? ClassUtils.forName(context.getActualReturnType().toString(), context.getClass().getClassLoader())
-                        : context.getRepositoryInformation().getDomainType();
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
-
-                ReturnedType returnedType = ReturnedType.of(actualReturnType, context.getRepositoryInformation().getDomainType(), projectionFactory);
-				String stringQuery = queryCreator.createQuery(partTree, returnedType, context);
-				body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
-
-				body.addStatement("$T query = this.$L.createQuery($S)", jakarta.persistence.Query.class,
-					context.fieldNameOf(EntityManager.class), stringQuery);
-				int i = 1;
-				for (Parameter parameter : context.getMethod().getParameters()) {
-					body.addStatement("query.setParameter(" + i + ", " + parameter.getName() + ")");
-					i++;
+				try {
+					actualReturnType = isProjecting
+							? ClassUtils.forName(context.getActualReturnType().toString(), context.getClass().getClassLoader())
+							: context.getRepositoryInformation().getDomainType();
+				} catch (ClassNotFoundException e) {
+					throw new RuntimeException(e);
 				}
-				if(context.returnsSingleValue()) {
+
+				ReturnedType returnedType = ReturnedType.of(actualReturnType,
+						context.getRepositoryInformation().getDomainType(), projectionFactory);
+				String stringQuery = queryCreator.createQuery(partTree, returnedType, context);
+
+				body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
+				body.addCode(
+						JpaCodeBlocks.queryBlockBuilder(context).usingQueryVariableName("query").filter(stringQuery).build());
+				if (context.returnsSingleValue()) {
 					body.addStatement("return ($T) query.getSingleResultOrNull()", context.getReturnType());
 				} else if (!context.returnsVoid()) {
 					body.addStatement("return ($T) query.getResultList()", context.getReturnType());

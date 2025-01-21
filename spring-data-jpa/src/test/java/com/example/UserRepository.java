@@ -17,6 +17,8 @@ package com.example;
 
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -31,37 +33,11 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	List<User> findByLastname(String lastname);
 
-	User findByEmailAddress(String emailAddress);
+	List<User> findByLastname(String lastname, Sort sort);
 
-	// @Entity
-	// class User {
-	//
-	// @Id private Long id;
-	// String firstname;
-	// String lastname;
-	//
-	// public void setId(Long id) {
-	// this.id = id;
-	// }
-	//
-	// public Long getId() {
-	// return id;
-	// }
-	//
-	// public String getFirstname() {
-	// return firstname;
-	// }
-	//
-	// public void setFirstname(String firstname) {
-	// this.firstname = firstname;
-	// }
-	//
-	// public String getLastname() {
-	// return lastname;
-	// }
-	//
-	// public void setLastname(String lastname) {
-	// this.lastname = lastname;
-	// }
-	// }
+	List<User> findByLastname(String lastname, Pageable page);
+
+	List<User> findByLastnameOrderByFirstname(String lastname);
+
+	User findByEmailAddress(String emailAddress);
 }

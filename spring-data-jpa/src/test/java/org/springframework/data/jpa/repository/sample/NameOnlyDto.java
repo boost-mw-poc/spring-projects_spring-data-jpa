@@ -16,7 +16,7 @@
 package org.springframework.data.jpa.repository.sample;
 
 // DATAJPA-1334
-class NameOnlyDto {
+public class NameOnlyDto {
 
 	private String firstname;
 	private String lastname;

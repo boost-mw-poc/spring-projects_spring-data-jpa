@@ -243,6 +243,12 @@
 			<optional>true</optional>
 		</dependency>
 
+		<dependency>
+			<groupId>org.jboss.logging</groupId>
+			<artifactId>jboss-logging</artifactId>
+			<version>3.6.1.Final</version>
+		</dependency>
+
 	</dependencies>
 
 	<build>
@@ -373,6 +379,11 @@
 							<groupId>jakarta.persistence</groupId>
 							<artifactId>jakarta.persistence-api</artifactId>
 							<version>${jakarta-persistence-api}</version>
+						</path>
+						<path>
+							<groupId>org.jboss.logging</groupId>
+							<artifactId>jboss-logging</artifactId>
+							<version>3.6.1.Final</version>
 						</path>
 					</annotationProcessorPaths>
 				</configuration>

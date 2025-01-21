@@ -27,6 +27,8 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.test.tools.ClassFile;
+import org.springframework.data.jpa.domain.sample.Role;
+import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.repository.config.AotRepositoryContext;
 import org.springframework.data.repository.core.RepositoryInformation;
 import org.springframework.data.repository.core.support.RepositoryComposition;
@@ -85,7 +87,7 @@ class TestJpaAotRepsitoryContext implements AotRepositoryContext {
 
 	@Override
 	public Set<Class<?>> getResolvedTypes() {
-		return Set.of();
+		return Set.of(User.class, Role.class);
 	}
 
 	public List<ClassFile> getRequiredContextFiles() {

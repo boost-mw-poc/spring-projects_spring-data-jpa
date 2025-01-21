@@ -17,48 +17,51 @@ package com.example;
 
 import java.util.List;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
+import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 
 /**
  * @author Christoph Strobl
  */
-public interface UserRepository extends CrudRepository<String, Long> {
+public interface UserRepository extends CrudRepository<User, Integer> {
 
-    @Query("select u from User u where u.firstname = ?1")
-    List<User> findAllUsingAnnotatedJpqlQuery(String firstname);
+	@Query("select u from User u where u.firstname = ?1")
+	List<User> findAllUsingAnnotatedJpqlQuery(String firstname);
 
-    @Entity
-    class User {
+	List<User> findByLastname(String lastname);
 
-        @Id private Long id;
-        String firstname;
-        String lastname;
+	User findByEmailAddress(String emailAddress);
 
-        public void setId(Long id) {
-            this.id = id;
-        }
-
-        public Long getId() {
-            return id;
-        }
-
-        public String getFirstname() {
-            return firstname;
-        }
-
-        public void setFirstname(String firstname) {
-            this.firstname = firstname;
-        }
-
-        public String getLastname() {
-            return lastname;
-        }
-
-        public void setLastname(String lastname) {
-            this.lastname = lastname;
-        }
-    }
+	// @Entity
+	// class User {
+	//
+	// @Id private Long id;
+	// String firstname;
+	// String lastname;
+	//
+	// public void setId(Long id) {
+	// this.id = id;
+	// }
+	//
+	// public Long getId() {
+	// return id;
+	// }
+	//
+	// public String getFirstname() {
+	// return firstname;
+	// }
+	//
+	// public void setFirstname(String firstname) {
+	// this.firstname = firstname;
+	// }
+	//
+	// public String getLastname() {
+	// return lastname;
+	// }
+	//
+	// public void setLastname(String lastname) {
+	// this.lastname = lastname;
+	// }
+	// }
 }

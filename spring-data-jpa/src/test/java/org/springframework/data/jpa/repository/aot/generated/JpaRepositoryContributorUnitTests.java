@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -109,6 +110,30 @@ class JpaRepositoryContributorUnitTests {
 		});
 	}
 
+
+	@Test
+	void testFindDerivedFinderSingleEntity() {
+
+		generated.verify(methodInvoker -> {
+
+			User user = methodInvoker.invoke("findByEmailAddress", "luke@jedi.org").onBean("aotUserRepository");
+			assertThat(user.getLastname()).isEqualTo("Skywalker");
+		});
+	}
+
+	@Test
+	void testFindDerivedFinderOptionalEntity() {
+
+		generated.verify(methodInvoker -> {
+
+			Optional<User> user = methodInvoker.invoke("findOptionalOneByEmailAddress", "yoda@jedi.org").onBean("aotUserRepository");
+			assertThat(user).isNotNull().containsInstanceOf(User.class)
+				.hasValueSatisfying(it -> assertThat(it).extracting(User::getFirstname).isEqualTo("Yoda"));
+		});
+	}
+
+
+
 	@Test
 	public void testMulti() {
 		generated.verify(methodInvoker -> {
@@ -167,15 +192,6 @@ class JpaRepositoryContributorUnitTests {
 		// exists / count / delete
 		// @Modifying
 		// flush / clear
-	}
-
-	@Test
-	public void testSingle() {
-		generated.verify(methodInvoker -> {
-
-			User user = methodInvoker.invoke("findByEmailAddress", "luke@jedi.org").onBean("aotUserRepository");
-			assertThat(user.getLastname()).isEqualTo("Skywalker");
-		});
 	}
 
 	static GeneratedContextBuilder generateContext(TestGenerationContext generationContext) {

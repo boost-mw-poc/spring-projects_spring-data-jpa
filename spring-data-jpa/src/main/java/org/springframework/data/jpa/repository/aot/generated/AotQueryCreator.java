@@ -38,14 +38,14 @@ public class AotQueryCreator {
         this.metamodel = metamodel;
     }
 
-    String createQuery(PartTree partTree, ReturnedType returnedType, AotRepositoryMethodGenerationContext context) {
+    AotStringQuery createQuery(PartTree partTree, ReturnedType returnedType, AotRepositoryMethodGenerationContext context) {
 
         ParametersSource parametersSource = ParametersSource.of(context.getRepositoryInformation(), context.getMethod());
         JpaParameters parameters = new JpaParameters(parametersSource);
         ParameterMetadataProvider metadataProvider = new ParameterMetadataProvider(parameters, EscapeCharacter.DEFAULT, JpqlQueryTemplates.UPPER);
 
         JpaQueryCreator queryCreator = new JpaQueryCreator(partTree, returnedType, metadataProvider, JpqlQueryTemplates.UPPER, metamodel);
-        return queryCreator.createQuery();
+        return AotStringQuery.bindable(queryCreator.createQuery(), metadataProvider.getBindings());
     }
 
 

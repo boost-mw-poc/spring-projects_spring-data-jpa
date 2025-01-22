@@ -18,21 +18,17 @@ package org.springframework.data.jpa.repository.aot.generated;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 
-import java.lang.reflect.Parameter;
-import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
-import org.springframework.data.domain.Limit;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.query.DeclaredQuery;
+import org.springframework.data.jpa.repository.query.ParameterBinding;
 import org.springframework.data.jpa.repository.query.QueryEnhancerFactory;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
-import org.springframework.data.repository.query.parser.Part;
-import org.springframework.data.repository.query.parser.Part.Type;
-import org.springframework.data.repository.query.parser.PartTree;
 import org.springframework.javapoet.CodeBlock;
-import org.springframework.util.ClassUtils;
+import org.springframework.javapoet.CodeBlock.Builder;
+import org.springframework.javapoet.TypeName;
+import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -47,11 +43,71 @@ public class JpaCodeBlocks {
 		return new QueryBlockBuilder(context);
 	}
 
+	static QueryExecutionBlockBuilder queryExecutionBlockBuilder(AotRepositoryMethodGenerationContext context) {
+		return new QueryExecutionBlockBuilder(context);
+	}
+
+	static class QueryExecutionBlockBuilder {
+
+		AotRepositoryMethodGenerationContext context;
+		private String queryVariableName;
+
+		public QueryExecutionBlockBuilder(AotRepositoryMethodGenerationContext context) {
+			this.context = context;
+		}
+
+		QueryExecutionBlockBuilder referencing(String queryVariableName) {
+
+			this.queryVariableName = queryVariableName;
+			return this;
+		}
+
+		CodeBlock build() {
+
+			Builder builder = CodeBlock.builder();
+
+			boolean isProjecting = context.getActualReturnType() != null
+					&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
+							context.getActualReturnType());
+			Object actualReturnType = isProjecting ? context.getActualReturnType()
+					: context.getRepositoryInformation().getDomainType();
+
+			builder.add("\n");
+
+			if (context.returnsSingleValue()) {
+				if (context.returnsOptionalValue()) {
+					builder.addStatement("return $T.ofNullable(($T) $L.getSingleResultOrNull())", Optional.class,
+							actualReturnType, queryVariableName);
+				} else if (context.isCountMethod()) {
+					// TODO: count
+					builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
+				} else if (context.isExistsMethod()) {
+					// TODO: exists
+					builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
+				} else {
+					builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
+				}
+			} else if (context.returnsPage()) {
+				// TODO: page
+				builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+			} else if (context.returnsSlice()) {
+				// TODO: slice
+				builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+			} else {
+
+				builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+			}
+
+			return builder.build();
+
+		}
+	}
+
 	static class QueryBlockBuilder {
 
 		private final AotRepositoryMethodGenerationContext context;
 		private String queryVariableName;
-		private String queryString;
+		private AotStringQuery query;
 
 		public QueryBlockBuilder(AotRepositoryMethodGenerationContext context) {
 			this.context = context;
@@ -64,7 +120,11 @@ public class JpaCodeBlocks {
 		}
 
 		QueryBlockBuilder filter(String queryString) {
-			this.queryString = queryString;
+			return filter(AotStringQuery.of(queryString));
+		}
+
+		QueryBlockBuilder filter(AotStringQuery query) {
+			this.query = query;
 			return this;
 		}
 
@@ -73,7 +133,7 @@ public class JpaCodeBlocks {
 			CodeBlock.Builder builder = CodeBlock.builder();
 			builder.add("\n");
 			String queryStringNameVariableName = "%sString".formatted(queryVariableName);
-			builder.addStatement("$T $L = $S", String.class, queryStringNameVariableName, queryString);
+			builder.addStatement("$T $L = $S", String.class, queryStringNameVariableName, query.getQueryString());
 
 			// sorting
 			// TODO: refactor into sort builder
@@ -98,62 +158,28 @@ public class JpaCodeBlocks {
 			builder.addStatement("$T $L = this.$L.createQuery($L)", Query.class, queryVariableName,
 					context.fieldNameOf(EntityManager.class), queryStringNameVariableName);
 
-			// parameters
-			// TODO: refactor into parameter builder
-			int i = 1;
+			for (ParameterBinding binding : query.parameterBindings()) {
 
-			for (Parameter parameter : context.getMethod().getParameters()) {
-				if (ClassUtils.isAssignable(Sort.class, parameter.getType())
-						|| ClassUtils.isAssignable(Pageable.class, parameter.getType()) || ClassUtils.isAssignable(Limit.class, parameter.getType())) {
-					// skip
-				} else {
-					// TODO: check the parameter binding
-					if(!context.getMethod().isAnnotationPresent(org.springframework.data.jpa.repository.Query.class)) {
-						PartTree partTree = new PartTree(context.getMethod().getName(), context.getRepositoryInformation().getDomainType());
-						List<Part> list = partTree.getParts().stream().toList();
-
-						// So we need to know about the property type and part assignment to figure out if we need to wrap the string for starting/ending/containing stuff
-						// TODO: we basicall need to have StringQuery.parseParameterBindingsOfQueryIntoBindingsAndReturnCleanedQuery
-						if (i-1 < list.size()) {
-							Type type = Type.SIMPLE_PROPERTY;
-							Part thePart = null;
-							int argCount = 0;
-							for(Part part : partTree.getParts()) {
-								if(argCount == i) {
-									type = part.getType();
-									thePart = part;
-								}
-								int added = 0;
-								while(added != part.getNumberOfArguments()) {
-									argCount++;
-									added++;
-									if(argCount == i) {
-										type = part.getType();
-										thePart = part;
-									}
-								}
-							}
-							if(thePart != null && thePart.getProperty().getTypeInformation().getType() == String.class) {
-								if (Type.STARTING_WITH == type) {
-									builder.addStatement("$L.setParameter(" + i + ", $T.format($S, $L))", queryVariableName, String.class, "%s%%", parameter.getName());
-								} else if (Type.ENDING_WITH == type) {
-									builder.addStatement("$L.setParameter(" + i + ", $T.format($S, $L))", queryVariableName, String.class, "%%%s", parameter.getName());
-								} else if (Type.CONTAINING == type) {
-									builder.addStatement("$L.setParameter(" + i + ", $T.format($S, $L))", queryVariableName, String.class, "%%%s%%", parameter.getName());
-								} else {
-									builder.addStatement("$L.setParameter(" + i + ", $L)", queryVariableName, parameter.getName());
-								}
-							} else {
-								builder.addStatement("$L.setParameter(" + i + ", $L)", queryVariableName, parameter.getName());
-							}
-						} else {
-							builder.addStatement("$L.setParameter(" + i + ", $L)", queryVariableName, parameter.getName());
-						}
+				Object prepare = binding.prepare("s");
+				if (prepare instanceof String prepared && !prepared.equals("s")) {
+					String format = prepared.replaceAll("%", "%%").replace("s", "%s");
+					if (binding.getIdentifier().hasPosition()) {
+						builder.addStatement("$L.setParameter($L, $S.formatted($L))", queryVariableName,
+								binding.getIdentifier().getPosition(), format,
+								context.getParameterNameOfPosition(binding.getIdentifier().getPosition() - 1));
 					} else {
-						builder.addStatement("$L.setParameter(" + i + ", $L)", queryVariableName, parameter.getName());
+						builder.addStatement("$L.setParameter($S, $S.formatted($L))", queryVariableName,
+								binding.getIdentifier().getName(), format, binding.getIdentifier().getName());
+					}
+				} else {
+					if (binding.getIdentifier().hasPosition()) {
+						builder.addStatement("$L.setParameter($L, $L)", queryVariableName, binding.getIdentifier().getPosition(),
+								context.getParameterNameOfPosition(binding.getIdentifier().getPosition() - 1));
+					} else {
+						builder.addStatement("$L.setParameter($S, $L)", queryVariableName, binding.getIdentifier().getName(),
+								binding.getIdentifier().getName());
 					}
 				}
-				i++;
 			}
 
 			{
@@ -170,8 +196,8 @@ public class JpaCodeBlocks {
 				String pageableParamterName = context.getPageableParameterName();
 				if (StringUtils.hasText(pageableParamterName)) {
 					builder.beginControlFlow("if($L.isPaged())", pageableParamterName);
-					//Long.valueOf(1L).intValue();
-					builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName, pageableParamterName);
+					builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName,
+							pageableParamterName);
 					builder.addStatement("$L.setMaxResults($L.getPageSize())", queryVariableName, pageableParamterName);
 					builder.endControlFlow();
 				}

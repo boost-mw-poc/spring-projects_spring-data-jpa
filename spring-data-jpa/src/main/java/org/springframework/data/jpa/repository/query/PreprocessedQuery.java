@@ -15,8 +15,6 @@
  */
 package org.springframework.data.jpa.repository.query;
 
-import static java.util.regex.Pattern.*;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -37,10 +35,6 @@ import org.springframework.data.expression.ValueExpressionParser;
 import org.springframework.data.repository.query.ValueExpressionQueryRewriter;
 import org.springframework.data.repository.query.parser.Part;
 import org.springframework.util.Assert;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.util.ObjectUtils;
-import org.springframework.util.StringUtils;
 
 /**
  * A pre-parsed query implementing {@link DeclaredQuery} providing information about parameter bindings.

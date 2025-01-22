@@ -65,8 +65,11 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	@Query("select u from User u where u.emailAddress = ?1")
 	User findAnnotatedQueryByEmailAddress(String username);
 
-	@Query("select u from User u where u.lastname = ?1")
+	@Query("select u from User u where u.lastname like ?1%")
 	List<User> findAnnotatedQueryByLastname(String lastname);
+
+	@Query("select u from User u where u.lastname like :lastname%")
+	List<User> findAnnotatedQueryByLastnameParamter(String lastname);
 
 	@Query("""
  		select u 

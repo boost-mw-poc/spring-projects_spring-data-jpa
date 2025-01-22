@@ -75,21 +75,8 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 
 				body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
-				// body.addStatement("$T query = this.$L.createQuery($S)", jakarta.persistence.Query.class,
-				// context.fieldNameOf(EntityManager.class), query.value());
-				// int i = 1;
-				// for (Parameter parameter : context.getMethod().getParameters()) {
-				// body.addStatement("query.setParameter(" + i + ", " + parameter.getName() + ")");
-				// i++;
-				// }
 				body.addCode(
 						JpaCodeBlocks.queryBlockBuilder(context).usingQueryVariableName("query").filter(query.value()).build());
-
-				if (context.returnsSingleValue()) {
-					body.addStatement("return ($T) query.getSingleResultOrNull()", context.getReturnType());
-				} else if (!context.returnsVoid()) {
-					body.addStatement("return ($T) query.getResultList()", context.getReturnType());
-				}
 			} else {
 
 				PartTree partTree = new PartTree(context.getMethod().getName(),
@@ -112,17 +99,13 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 
 				ReturnedType returnedType = ReturnedType.of(actualReturnType,
 						context.getRepositoryInformation().getDomainType(), projectionFactory);
-				String stringQuery = queryCreator.createQuery(partTree, returnedType, context);
+				AotStringQuery stringQuery = queryCreator.createQuery(partTree, returnedType, context);
 
 				body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 				body.addCode(
 						JpaCodeBlocks.queryBlockBuilder(context).usingQueryVariableName("query").filter(stringQuery).build());
-				if (context.returnsSingleValue()) {
-					body.addStatement("return ($T) query.getSingleResultOrNull()", context.getReturnType());
-				} else if (!context.returnsVoid()) {
-					body.addStatement("return ($T) query.getResultList()", context.getReturnType());
-				}
 			}
+			body.addCode(JpaCodeBlocks.queryExecutionBlockBuilder(context).referencing("query").build());
 		});
 	}
 }

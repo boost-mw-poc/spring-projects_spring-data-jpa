@@ -38,6 +38,7 @@ import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.test.tools.TestCompiler;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.sample.User;
@@ -103,7 +104,7 @@ class JpaRepositoryContributorUnitTests {
 			User vader = new User("Anakin", "Skywalker", "vader@empire.com");
 			em.persist(vader);
 
-			User kylo = new User("Ben", "Solo", "ben@new-empire.com");
+			User kylo = new User("Ben", "Solo", "kylo@new-empire.com");
 			em.persist(kylo);
 		});
 	}
@@ -122,7 +123,8 @@ class JpaRepositoryContributorUnitTests {
 	public void testMultiSorted() {
 		generated.verify(methodInvoker -> {
 
-			List<User> users = methodInvoker.invoke("findByLastnameOrderByFirstname", "Skywalker").onBean("aotUserRepository");
+			List<User> users = methodInvoker.invoke("findByLastnameOrderByFirstname", "Skywalker")
+					.onBean("aotUserRepository");
 			assertThat(users).extracting(User::getEmailAddress).containsExactly("vader@empire.com", "luke@jedi.org");
 		});
 	}
@@ -131,7 +133,8 @@ class JpaRepositoryContributorUnitTests {
 	public void testMultiDynamicSorted() {
 		generated.verify(methodInvoker -> {
 
-			List<User> users = methodInvoker.invoke("findByLastname", "Skywalker", Sort.by("firstname")).onBean("aotUserRepository");
+			List<User> users = methodInvoker.invoke("findByLastname", "Skywalker", Sort.by("firstname"))
+					.onBean("aotUserRepository");
 			assertThat(users).extracting(User::getEmailAddress).containsExactly("vader@empire.com", "luke@jedi.org");
 		});
 	}
@@ -140,9 +143,30 @@ class JpaRepositoryContributorUnitTests {
 	public void testMultiDynamicPaged() {
 		generated.verify(methodInvoker -> {
 
-			List<User> users = methodInvoker.invoke("findByLastname", "Skywalker", PageRequest.of(0, 10, Sort.by("firstname"))).onBean("aotUserRepository");
-			assertThat(users).extracting(User::getEmailAddress).containsExactly("vader@empire.com", "luke@jedi.org");
+			List<User> users = methodInvoker
+					.invoke("findByLastnameStartingWithOrderByFirstname", "S", Limit.of(2))
+					.onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("vader@empire.com", "kylo@new-empire.com");
 		});
+	}
+
+	@Test
+	void todo() {
+
+		// Query q;
+		// q.setMaxResults()
+		// q.setFirstResult()
+
+		// 1 build some more stuff from below
+		// 2 set up boot sample project in data samples
+
+		// query hints
+		// first and max result for pagination
+		// entity graphs
+		// native queries
+		// exists / count / delete
+		// @Modifying
+		// flush / clear
 	}
 
 	@Test

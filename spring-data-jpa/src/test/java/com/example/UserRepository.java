@@ -16,8 +16,12 @@
 package com.example;
 
 import java.util.List;
+import java.util.Optional;
 
+import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.jpa.repository.Query;
@@ -28,10 +32,75 @@ import org.springframework.data.repository.CrudRepository;
  */
 public interface UserRepository extends CrudRepository<User, Integer> {
 
+	List<User> findUserNoArgumentsBy();
+
+	User findOneByEmailAddress(String emailAddress);
+
+	Optional<User> findOptionalOneByEmailAddress(String emailAddress);
+
+	Long countUsersByLastname(String lastname);
+
+	Boolean existsUserByLastname(String lastname);
+
+	List<User> findByLastnameStartingWith(String lastname);
+
+	List<User> findTop2ByLastnameStartingWith(String lastname);
+
+	List<User> findByLastnameStartingWithOrderByFirstname(String lastname);
+
+	List<User> findByLastnameStartingWith(String lastname, Limit limit);
+
+	List<User> findByLastnameStartingWith(String lastname, Sort sort);
+
+	List<User> findByLastnameStartingWith(String lastname, Sort sort, Limit limit);
+
+	List<User> findByLastnameStartingWith(String lastname, Pageable page);
+
+	Page<User> findPageOfUsersByLastnameStartingWith(String lastname, Pageable page);
+
+	Slice<User> findSliceOfUserByLastnameStartingWith(String lastname, Pageable page);
+
+	/* Annotated Queries */
+
+	@Query("select u from User u where u.emailAddress = ?1")
+	User findAnnotatedQueryByEmailAddress(String username);
+
+	@Query("select u from User u where u.lastname = ?1")
+	List<User> findAnnotatedQueryByLastname(String lastname);
+
+	@Query("""
+ 		select u 
+ 		from User u 
+ 		where u.lastname = ?1""")
+	List<User> findAnnotatedMultilineQueryByLastname(String username);
+
+	@Query("select u from User u where u.lastname = ?1")
+	List<User> findAnnotatedQueryByLastname(String lastname, Limit limit);
+
+	@Query("select u from User u where u.lastname = ?1")
+	List<User> findAnnotatedQueryByLastname(String lastname, Sort sort);
+
+	@Query("select u from User u where u.lastname = ?1")
+	List<User> findAnnotatedQueryByLastname(String lastname, Limit limit, Sort sort);
+
+	@Query("select u from User u where u.lastname = ?1")
+	List<User> findAnnotatedQueryByLastname(String lastname, Pageable pageable);
+
+	@Query("select u from User u where u.lastname = ?1")
+	Page<User> findAnnotatedQueryPageOfUsersByLastname(String lastname, Pageable pageable);
+
+	@Query("select u from User u where u.lastname = ?1")
+	Slice<User> findAnnotatedQuerySliceOfUsersByLastname(String lastname, Pageable pageable);
+
+
+	// old ones
+
 	@Query("select u from User u where u.firstname = ?1")
 	List<User> findAllUsingAnnotatedJpqlQuery(String firstname);
 
 	List<User> findByLastname(String lastname);
+
+	List<User> findByLastnameStartingWithOrderByFirstname(String lastname, Limit limit);
 
 	List<User> findByLastname(String lastname, Sort sort);
 

@@ -46,7 +46,7 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	List<User> findTop2ByLastnameStartingWith(String lastname);
 
-	List<User> findByLastnameStartingWithOrderByFirstname(String lastname);
+	List<User> findByLastnameStartingWithOrderByEmailAddress(String lastname);
 
 	List<User> findByLastnameStartingWith(String lastname, Limit limit);
 
@@ -74,25 +74,25 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	@Query("""
  		select u 
  		from User u 
- 		where u.lastname = ?1""")
+ 		where u.lastname LIKE ?1%""")
 	List<User> findAnnotatedMultilineQueryByLastname(String username);
 
-	@Query("select u from User u where u.lastname = ?1")
+	@Query("select u from User u where u.lastname like ?1%")
 	List<User> findAnnotatedQueryByLastname(String lastname, Limit limit);
 
-	@Query("select u from User u where u.lastname = ?1")
+	@Query("select u from User u where u.lastname like ?1%")
 	List<User> findAnnotatedQueryByLastname(String lastname, Sort sort);
 
-	@Query("select u from User u where u.lastname = ?1")
+	@Query("select u from User u where u.lastname like ?1%")
 	List<User> findAnnotatedQueryByLastname(String lastname, Limit limit, Sort sort);
 
-	@Query("select u from User u where u.lastname = ?1")
+	@Query("select u from User u where u.lastname like ?1%")
 	List<User> findAnnotatedQueryByLastname(String lastname, Pageable pageable);
 
-	@Query("select u from User u where u.lastname = ?1")
+	@Query("select u from User u where u.lastname like ?1%")
 	Page<User> findAnnotatedQueryPageOfUsersByLastname(String lastname, Pageable pageable);
 
-	@Query("select u from User u where u.lastname = ?1")
+	@Query("select u from User u where u.lastname like ?1%")
 	Slice<User> findAnnotatedQuerySliceOfUsersByLastname(String lastname, Pageable pageable);
 
 

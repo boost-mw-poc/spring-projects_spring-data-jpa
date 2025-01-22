@@ -18,6 +18,7 @@ package org.springframework.data.jpa.repository.aot.generated;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.query.ParameterBinding;
 import org.springframework.data.jpa.repository.query.ParameterBindingParser;
 import org.springframework.data.jpa.repository.query.ParameterBindingParser.Metadata;
@@ -32,6 +33,7 @@ class AotStringQuery {
 	private final String sanitized;
 	private final List<ParameterBinding> parameterBindings;
 	private final Metadata parameterMetadata;
+	private Limit limit;
 
 	public AotStringQuery(String raw, String sanitized, List<ParameterBinding> parameterBindings,
 			Metadata parameterMetadata) {
@@ -61,5 +63,17 @@ class AotStringQuery {
 
 	public List<ParameterBinding> parameterBindings() {
 		return this.parameterBindings;
+	}
+
+	boolean isLimited() {
+		return limit != null && limit.isLimited();
+	}
+
+	Limit getLimit() {
+		return limit;
+	}
+
+	public void setLimit(Limit limit) {
+		this.limit = limit;
 	}
 }

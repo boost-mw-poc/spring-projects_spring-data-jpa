@@ -74,28 +74,27 @@ public class JpaCodeBlocks {
 
 			builder.add("\n");
 
-			if (context.returnsSingleValue()) {
-				if (context.returnsOptionalValue()) {
-					builder.addStatement("return $T.ofNullable(($T) $L.getSingleResultOrNull())", Optional.class,
-							actualReturnType, queryVariableName);
-				} else if (context.isCountMethod()) {
-					// TODO: count
-					builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
-				} else if (context.isExistsMethod()) {
-					// TODO: exists
-					builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
-				} else {
-					builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
-				}
-			} else if (context.returnsPage()) {
-				// TODO: page
-				builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
-			} else if (context.returnsSlice()) {
-				// TODO: slice
-				builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+			if (context.isExistsMethod()) {
+				builder.addStatement("return !$L.getResultList().isEmpty()", queryVariableName);
 			} else {
 
-				builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+				if (context.returnsSingleValue()) {
+					if (context.returnsOptionalValue()) {
+						builder.addStatement("return $T.ofNullable(($T) $L.getSingleResultOrNull())", Optional.class,
+								actualReturnType, queryVariableName);
+					} else {
+						builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
+					}
+				} else if (context.returnsPage()) {
+					// TODO: page
+					builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+				} else if (context.returnsSlice()) {
+					// TODO: slice
+					builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+				} else {
+
+					builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+				}
 			}
 
 			return builder.build();
@@ -182,24 +181,31 @@ public class JpaCodeBlocks {
 				}
 			}
 
-			{
-				String limitParameterName = context.getLimitParameterName();
+			if (context.isExistsMethod()) {
+				builder.addStatement("$L.setMaxResults(1)", queryVariableName);
+			} else {
 
-				if (StringUtils.hasText(limitParameterName)) {
-					builder.beginControlFlow("if($L.isLimited())", limitParameterName);
-					builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limitParameterName);
-					builder.endControlFlow();
+				{
+					String limitParameterName = context.getLimitParameterName();
+
+					if (StringUtils.hasText(limitParameterName)) {
+						builder.beginControlFlow("if($L.isLimited())", limitParameterName);
+						builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limitParameterName);
+						builder.endControlFlow();
+					} else if (query.isLimited()) {
+						builder.addStatement("$L.setMaxResults($L)", queryVariableName, query.getLimit().max());
+					}
 				}
-			}
 
-			{
-				String pageableParamterName = context.getPageableParameterName();
-				if (StringUtils.hasText(pageableParamterName)) {
-					builder.beginControlFlow("if($L.isPaged())", pageableParamterName);
-					builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName,
-							pageableParamterName);
-					builder.addStatement("$L.setMaxResults($L.getPageSize())", queryVariableName, pageableParamterName);
-					builder.endControlFlow();
+				{
+					String pageableParamterName = context.getPageableParameterName();
+					if (StringUtils.hasText(pageableParamterName)) {
+						builder.beginControlFlow("if($L.isPaged())", pageableParamterName);
+						builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName,
+								pageableParamterName);
+						builder.addStatement("$L.setMaxResults($L.getPageSize())", queryVariableName, pageableParamterName);
+						builder.endControlFlow();
+					}
 				}
 			}
 

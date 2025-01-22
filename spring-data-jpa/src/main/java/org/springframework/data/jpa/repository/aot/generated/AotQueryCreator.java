@@ -45,7 +45,12 @@ public class AotQueryCreator {
         ParameterMetadataProvider metadataProvider = new ParameterMetadataProvider(parameters, EscapeCharacter.DEFAULT, JpqlQueryTemplates.UPPER);
 
         JpaQueryCreator queryCreator = new JpaQueryCreator(partTree, returnedType, metadataProvider, JpqlQueryTemplates.UPPER, metamodel);
-        return AotStringQuery.bindable(queryCreator.createQuery(), metadataProvider.getBindings());
+        AotStringQuery query = AotStringQuery.bindable(queryCreator.createQuery(), metadataProvider.getBindings());
+
+        if(partTree.isLimiting()) {
+            query.setLimit(partTree.getResultLimit());
+        }
+        return query;
     }
 
 

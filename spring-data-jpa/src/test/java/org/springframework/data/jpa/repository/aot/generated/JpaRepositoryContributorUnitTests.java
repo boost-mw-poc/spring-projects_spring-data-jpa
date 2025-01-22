@@ -29,6 +29,7 @@ import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.aot.test.generate.TestGenerationContext;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -40,7 +41,9 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.test.tools.TestCompiler;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.util.Lazy;
@@ -110,7 +113,6 @@ class JpaRepositoryContributorUnitTests {
 		});
 	}
 
-
 	@Test
 	void testFindDerivedFinderSingleEntity() {
 
@@ -126,56 +128,278 @@ class JpaRepositoryContributorUnitTests {
 
 		generated.verify(methodInvoker -> {
 
-			Optional<User> user = methodInvoker.invoke("findOptionalOneByEmailAddress", "yoda@jedi.org").onBean("aotUserRepository");
+			Optional<User> user = methodInvoker.invoke("findOptionalOneByEmailAddress", "yoda@jedi.org")
+					.onBean("aotUserRepository");
 			assertThat(user).isNotNull().containsInstanceOf(User.class)
-				.hasValueSatisfying(it -> assertThat(it).extracting(User::getFirstname).isEqualTo("Yoda"));
-		});
-	}
-
-
-
-	@Test
-	public void testMulti() {
-		generated.verify(methodInvoker -> {
-
-			List<User> users = methodInvoker.invoke("findByLastname", "Skywalker").onBean("aotUserRepository");
-			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("luke@jedi.org",
-					"vader@empire.com");
+					.hasValueSatisfying(it -> assertThat(it).extracting(User::getFirstname).isEqualTo("Yoda"));
 		});
 	}
 
 	@Test
-	public void testMultiSorted() {
+	void testDerivedCount() {
+
 		generated.verify(methodInvoker -> {
 
-			List<User> users = methodInvoker.invoke("findByLastnameOrderByFirstname", "Skywalker")
+			Long value = methodInvoker.invoke("countUsersByLastname", "Skywalker").onBean("aotUserRepository");
+			assertThat(value).isEqualTo(2L);
+		});
+	}
+
+	@Test
+	void testDerivedExists() {
+
+		generated.verify(methodInvoker -> {
+
+			Boolean exists = methodInvoker.invoke("existsUserByLastname", "Skywalker").onBean("aotUserRepository");
+			assertThat(exists).isTrue();
+		});
+	}
+
+	@Test
+	void testDerivedFinderWithoutArguments() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findUserNoArgumentsBy").onBean("aotUserRepository");
+			assertThat(users).hasSize(7).hasOnlyElementsOfType(User.class);
+		});
+	}
+
+	@Test
+	void testDerivedFinderReturningList() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S").onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("luke@jedi.org", "vader@empire.com",
+					"kylo@new-empire.com", "han@smuggler.net");
+		});
+	}
+
+	@Test
+	void testLimitedDerivedFinder() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findTop2ByLastnameStartingWith", "S").onBean("aotUserRepository");
+			assertThat(users).hasSize(2);
+		});
+	}
+
+	@Test
+	void testSortedDerivedFinder() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findByLastnameStartingWithOrderByEmailAddress", "S")
 					.onBean("aotUserRepository");
-			assertThat(users).extracting(User::getEmailAddress).containsExactly("vader@empire.com", "luke@jedi.org");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("han@smuggler.net", "kylo@new-empire.com",
+					"luke@jedi.org", "vader@empire.com");
 		});
 	}
 
 	@Test
-	public void testMultiDynamicSorted() {
+	void testDerivedFinderWithLimitArgument() {
+
 		generated.verify(methodInvoker -> {
 
-			List<User> users = methodInvoker.invoke("findByLastname", "Skywalker", Sort.by("firstname"))
+			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S", Limit.of(2))
 					.onBean("aotUserRepository");
-			assertThat(users).extracting(User::getEmailAddress).containsExactly("vader@empire.com", "luke@jedi.org");
+			assertThat(users).hasSize(2);
 		});
 	}
 
 	@Test
-	public void testMultiDynamicPaged() {
+	void testDerivedFinderWithSort() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S", Sort.by("emailAddress"))
+					.onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("han@smuggler.net", "kylo@new-empire.com",
+					"luke@jedi.org", "vader@empire.com");
+		});
+	}
+
+	@Test
+	void testDerivedFinderWithSortAndLimit() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S", Sort.by("emailAddress"), Limit.of(2))
+					.onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("han@smuggler.net", "kylo@new-empire.com");
+		});
+	}
+
+	@Test
+	void testDerivedFinderReturningListWithPageable() {
+
 		generated.verify(methodInvoker -> {
 
 			List<User> users = methodInvoker
-					.invoke("findByLastnameStartingWithOrderByFirstname", "S", Limit.of(2))
+					.invoke("findByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
 					.onBean("aotUserRepository");
-			assertThat(users).extracting(User::getEmailAddress).containsExactly("vader@empire.com", "kylo@new-empire.com");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("han@smuggler.net", "kylo@new-empire.com");
 		});
 	}
 
 	@Test
+	@Disabled
+	void testDerivedFinderReturningPage() {
+
+		generated.verify(methodInvoker -> {
+
+			Page<User> page = methodInvoker
+					.invoke("findPageOfUsersByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
+					.onBean("aotUserRepository");
+			assertThat(page.getTotalElements()).isEqualTo(4);
+			assertThat(page.getSize()).isEqualTo(2);
+			assertThat(page.getContent()).extracting(User::getEmailAddress).containsExactly("han@smuggler.net",
+					"kylo@new-empire.com");
+		});
+	}
+
+	@Test
+	@Disabled
+	void testDerivedFinderReturningSlice() {
+
+		generated.verify(methodInvoker -> {
+
+			Slice<User> slice = methodInvoker
+					.invoke("findSliceOfUserByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
+					.onBean("aotUserRepository");
+			assertThat(slice.hasNext()).isTrue();
+			assertThat(slice.getSize()).isEqualTo(2);
+			assertThat(slice.getContent()).extracting(User::getEmailAddress).containsExactly("han@smuggler.net",
+					"kylo@new-empire.com");
+		});
+	}
+
+	@Test
+	void testAnnotatedFinderReturningSingleValueWithQuery() {
+
+		generated.verify(methodInvoker -> {
+
+			User user = methodInvoker.invoke("findAnnotatedQueryByEmailAddress", "yoda@jedi.org").onBean("aotUserRepository");
+			assertThat(user).isNotNull().extracting(User::getFirstname).isEqualTo("Yoda");
+		});
+	}
+
+	@Test
+	void testAnnotatedFinderReturningListWithQuery() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S").onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
+					"kylo@new-empire.com", "luke@jedi.org", "vader@empire.com");
+		});
+	}
+
+	@Test
+	void testAnnotatedFinderUsingNamedParameterPlaceholderReturningListWithQuery() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastnameParamter", "S").onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
+				"kylo@new-empire.com", "luke@jedi.org", "vader@empire.com");
+		});
+	}
+
+	@Test
+	void testAnnotatedMultilineFinderWithQuery() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findAnnotatedMultilineQueryByLastname", "S").onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
+					"kylo@new-empire.com", "luke@jedi.org", "vader@empire.com");
+		});
+	}
+
+	@Test
+	void testAnnotatedFinderWithQueryAndLimit() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S", Limit.of(2))
+					.onBean("aotUserRepository");
+			assertThat(users).hasSize(2);
+		});
+	}
+
+	@Test
+	void testAnnotatedFinderWithQueryAndSort() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S", Sort.by("emailAddress"))
+					.onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("han@smuggler.net", "kylo@new-empire.com",
+					"luke@jedi.org", "vader@empire.com");
+		});
+	}
+
+	@Test
+	void testAnnotatedFinderWithQueryLimitAndSort() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S", Limit.of(2), Sort.by("emailAddress"))
+					.onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("han@smuggler.net", "kylo@new-empire.com");
+		});
+	}
+
+	@Test
+	void testAnnotatedFinderReturningListWithPageable() {
+
+		generated.verify(methodInvoker -> {
+
+			List<User> users = methodInvoker
+					.invoke("findAnnotatedQueryByLastname", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
+					.onBean("aotUserRepository");
+			assertThat(users).extracting(User::getEmailAddress).containsExactly("han@smuggler.net", "kylo@new-empire.com");
+		});
+	}
+
+	@Test
+	@Disabled
+	void testAnnotatedFinderReturningPage() {
+
+		generated.verify(methodInvoker -> {
+
+			Page<User> page = methodInvoker
+					.invoke("findAnnotatedQueryPageOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("username")))
+					.onBean("aotUserRepository");
+			assertThat(page.getTotalElements()).isEqualTo(4);
+			assertThat(page.getSize()).isEqualTo(2);
+			assertThat(page.getContent()).extracting(User::getEmailAddress).containsExactly("han@smuggler.net",
+					"kylo@new-empire.com");
+		});
+	}
+
+	@Test
+	@Disabled
+	void testAnnotatedFinderReturningSlice() {
+
+		generated.verify(methodInvoker -> {
+
+			Slice<User> slice = methodInvoker
+					.invoke("findAnnotatedQuerySliceOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("username")))
+					.onBean("aotUserRepository");
+			assertThat(slice.hasNext()).isTrue();
+			assertThat(slice.getSize()).isEqualTo(2);
+			assertThat(slice.getContent()).extracting(User::getEmailAddress).containsExactly("han@smuggler.net",
+					"kylo@new-empire.com");
+		});
+	}
+
+	// old stuff below
+
+	// TODO:
 	void todo() {
 
 		// Query q;

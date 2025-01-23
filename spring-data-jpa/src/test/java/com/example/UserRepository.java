@@ -95,6 +95,9 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	@Query("select u from User u where u.lastname like ?1%")
 	Slice<User> findAnnotatedQuerySliceOfUsersByLastname(String lastname, Pageable pageable);
 
+	// projections
+
+	List<UserDtoProjection> findUserProjectionByLastnameStartingWith(String lastname);
 
 	// old ones
 

@@ -18,13 +18,17 @@ package org.springframework.data.jpa.repository.aot.generated;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.jpa.repository.query.DeclaredQuery;
 import org.springframework.data.jpa.repository.query.ParameterBinding;
 import org.springframework.data.jpa.repository.query.QueryEnhancerFactory;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.CodeBlock.Builder;
 import org.springframework.javapoet.TypeName;
@@ -86,13 +90,18 @@ public class JpaCodeBlocks {
 						builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
 					}
 				} else if (context.returnsPage()) {
-					// TODO: page
-					builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+					builder.addStatement("return $T.getPage(($T<$T>) $L.getResultList(), $L, countAll)",
+							PageableExecutionUtils.class, List.class, actualReturnType, queryVariableName,
+							context.getPageableParameterName());
 				} else if (context.returnsSlice()) {
-					// TODO: slice
-					builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+					builder.addStatement("$T<$T> resultList = $L.getResultList()", List.class, actualReturnType,
+							queryVariableName);
+					builder.addStatement("boolean hasNext = $L.isPaged() && resultList.size() > $L.getPageSize()",
+							context.getPageableParameterName(), context.getPageableParameterName());
+					builder.addStatement(
+							"return new $T<>(hasNext ? resultList.subList(0, $L.getPageSize()) : resultList, $L, hasNext)",
+							SliceImpl.class, context.getPageableParameterName(), context.getPageableParameterName());
 				} else {
-
 					builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
 				}
 			}
@@ -134,6 +143,17 @@ public class JpaCodeBlocks {
 			String queryStringNameVariableName = "%sString".formatted(queryVariableName);
 			builder.addStatement("$T $L = $S", String.class, queryStringNameVariableName, query.getQueryString());
 
+			String countQueryStringNameVariableName = null;
+			String countQuyerVariableName = null;
+			if (context.returnsPage()) {
+				countQueryStringNameVariableName = "count%sString".formatted(StringUtils.capitalize(queryVariableName));
+				countQuyerVariableName = "count%s".formatted(StringUtils.capitalize(queryVariableName));
+				String projection = context.annotationValue(org.springframework.data.jpa.repository.Query.class,
+						"countProjection");
+				builder.addStatement("$T $L = $S", String.class, countQueryStringNameVariableName,
+						query.getCountQuery(projection));
+			}
+
 			// sorting
 			// TODO: refactor into sort builder
 			{
@@ -153,6 +173,55 @@ public class JpaCodeBlocks {
 					builder.endControlFlow();
 				}
 			}
+
+			addQueryBlock(builder, queryVariableName, queryStringNameVariableName);
+
+			if (context.isExistsMethod()) {
+				builder.addStatement("$L.setMaxResults(1)", queryVariableName);
+			} else {
+
+				{
+					String limitParameterName = context.getLimitParameterName();
+
+					if (StringUtils.hasText(limitParameterName)) {
+						builder.beginControlFlow("if($L.isLimited())", limitParameterName);
+						builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limitParameterName);
+						builder.endControlFlow();
+					} else if (query.isLimited()) {
+						builder.addStatement("$L.setMaxResults($L)", queryVariableName, query.getLimit().max());
+					}
+				}
+
+				{
+					String pageableParamterName = context.getPageableParameterName();
+					if (StringUtils.hasText(pageableParamterName)) {
+						builder.beginControlFlow("if($L.isPaged())", pageableParamterName);
+						builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName,
+								pageableParamterName);
+						if (context.returnsSlice() && !context.returnsPage()) {
+							builder.addStatement("$L.setMaxResults($L.getPageSize() + 1)", queryVariableName, pageableParamterName);
+						} else {
+							builder.addStatement("$L.setMaxResults($L.getPageSize())", queryVariableName, pageableParamterName);
+						}
+						builder.endControlFlow();
+					}
+				}
+			}
+
+			if (StringUtils.hasText(countQueryStringNameVariableName)) {
+				builder.beginControlFlow("$T $L = () ->", LongSupplier.class, "countAll");
+				addQueryBlock(builder, countQuyerVariableName, countQueryStringNameVariableName);
+				builder.addStatement("return ($T) $L.getSingleResult()", Long.class, countQuyerVariableName);
+
+				// end control flow does not work well with lambdas
+				builder.unindent();
+				builder.add("};\n");
+			}
+
+			return builder.build();
+		}
+
+		private void addQueryBlock(Builder builder, String queryVariableName, String queryStringNameVariableName) {
 
 			builder.addStatement("$T $L = this.$L.createQuery($L)", Query.class, queryVariableName,
 					context.fieldNameOf(EntityManager.class), queryStringNameVariableName);
@@ -180,36 +249,6 @@ public class JpaCodeBlocks {
 					}
 				}
 			}
-
-			if (context.isExistsMethod()) {
-				builder.addStatement("$L.setMaxResults(1)", queryVariableName);
-			} else {
-
-				{
-					String limitParameterName = context.getLimitParameterName();
-
-					if (StringUtils.hasText(limitParameterName)) {
-						builder.beginControlFlow("if($L.isLimited())", limitParameterName);
-						builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limitParameterName);
-						builder.endControlFlow();
-					} else if (query.isLimited()) {
-						builder.addStatement("$L.setMaxResults($L)", queryVariableName, query.getLimit().max());
-					}
-				}
-
-				{
-					String pageableParamterName = context.getPageableParameterName();
-					if (StringUtils.hasText(pageableParamterName)) {
-						builder.beginControlFlow("if($L.isPaged())", pageableParamterName);
-						builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName,
-								pageableParamterName);
-						builder.addStatement("$L.setMaxResults($L.getPageSize())", queryVariableName, pageableParamterName);
-						builder.endControlFlow();
-					}
-				}
-			}
-
-			return builder.build();
 		}
 	}
 }

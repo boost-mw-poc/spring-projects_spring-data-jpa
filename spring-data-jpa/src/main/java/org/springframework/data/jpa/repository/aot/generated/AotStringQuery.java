@@ -22,6 +22,9 @@ import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.query.ParameterBinding;
 import org.springframework.data.jpa.repository.query.ParameterBindingParser;
 import org.springframework.data.jpa.repository.query.ParameterBindingParser.Metadata;
+import org.springframework.data.jpa.repository.query.QueryUtils;
+import org.springframework.lang.Nullable;
+import org.springframework.util.StringUtils;
 
 /**
  * @author Christoph Strobl
@@ -59,6 +62,10 @@ class AotStringQuery {
 
 	public String getQueryString() {
 		return sanitized;
+	}
+
+	public String getCountQuery(@Nullable String projection) {
+		return QueryUtils.createCountQueryFor(sanitized, StringUtils.hasText(projection) ? projection : null, false);
 	}
 
 	public List<ParameterBinding> parameterBindings() {

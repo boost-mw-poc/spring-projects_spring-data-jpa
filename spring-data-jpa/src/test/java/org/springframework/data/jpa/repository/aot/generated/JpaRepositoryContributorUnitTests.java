@@ -29,7 +29,6 @@ import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.aot.test.generate.TestGenerationContext;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -51,6 +50,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.example.UserDtoProjection;
 import com.example.UserRepository;
 
 /**
@@ -245,7 +245,6 @@ class JpaRepositoryContributorUnitTests {
 	}
 
 	@Test
-	@Disabled
 	void testDerivedFinderReturningPage() {
 
 		generated.verify(methodInvoker -> {
@@ -261,7 +260,6 @@ class JpaRepositoryContributorUnitTests {
 	}
 
 	@Test
-	@Disabled
 	void testDerivedFinderReturningSlice() {
 
 		generated.verify(methodInvoker -> {
@@ -304,7 +302,7 @@ class JpaRepositoryContributorUnitTests {
 
 			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastnameParamter", "S").onBean("aotUserRepository");
 			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
-				"kylo@new-empire.com", "luke@jedi.org", "vader@empire.com");
+					"kylo@new-empire.com", "luke@jedi.org", "vader@empire.com");
 		});
 	}
 
@@ -366,13 +364,12 @@ class JpaRepositoryContributorUnitTests {
 	}
 
 	@Test
-	@Disabled
 	void testAnnotatedFinderReturningPage() {
 
 		generated.verify(methodInvoker -> {
 
 			Page<User> page = methodInvoker
-					.invoke("findAnnotatedQueryPageOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("username")))
+					.invoke("findAnnotatedQueryPageOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
 					.onBean("aotUserRepository");
 			assertThat(page.getTotalElements()).isEqualTo(4);
 			assertThat(page.getSize()).isEqualTo(2);
@@ -382,18 +379,29 @@ class JpaRepositoryContributorUnitTests {
 	}
 
 	@Test
-	@Disabled
 	void testAnnotatedFinderReturningSlice() {
 
 		generated.verify(methodInvoker -> {
 
 			Slice<User> slice = methodInvoker
-					.invoke("findAnnotatedQuerySliceOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("username")))
+					.invoke("findAnnotatedQuerySliceOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
 					.onBean("aotUserRepository");
 			assertThat(slice.hasNext()).isTrue();
 			assertThat(slice.getSize()).isEqualTo(2);
 			assertThat(slice.getContent()).extracting(User::getEmailAddress).containsExactly("han@smuggler.net",
 					"kylo@new-empire.com");
+		});
+	}
+
+	@Test
+	void testDerivedFinderReturningListOfProjections() {
+
+		generated.verify(methodInvoker -> {
+
+			List<UserDtoProjection> users = methodInvoker.invoke("findUserProjectionByLastnameStartingWith", "S")
+					.onBean("aotUserRepository");
+			assertThat(users).extracting(UserDtoProjection::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
+					"kylo@new-empire.com", "luke@jedi.org", "vader@empire.com");
 		});
 	}
 

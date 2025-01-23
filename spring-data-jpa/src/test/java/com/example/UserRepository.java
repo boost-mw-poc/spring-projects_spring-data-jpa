@@ -27,6 +27,7 @@ import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 
 /**
  * @author Christoph Strobl
@@ -106,7 +107,15 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	@Query("delete from User u where u.emailAddress = ?1")
 	User deleteAnnotatedQueryByEmailAddress(String username);
 
+	// native queries
+
+	@Query(value = "SELECT firstname FROM SD_User ORDER BY UCASE(firstname)", countQuery = "SELECT count(*) FROM SD_User",
+		nativeQuery = true)
+	Page<String> findByNativeQueryWithPageable(Pageable pageable);
+
 	// projections
+
+
 
 	List<UserDtoProjection> findUserProjectionByLastnameStartingWith(String lastname);
 

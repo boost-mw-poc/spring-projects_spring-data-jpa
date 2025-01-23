@@ -71,12 +71,16 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 		return new AotRepositoryMethodBuilder(generationContext).customize((context, body) -> {
 
 			Query query = AnnotatedElementUtils.findMergedAnnotation(context.getMethod(), Query.class);
-			if (query != null) {
+			if (query != null && StringUtils.hasText(query.value())) {
 
+				AotStringQuery aotStringQuery = query.nativeQuery() ? AotStringQuery.nativeQuery(query.value())
+						: AotStringQuery.of(query.value());
+				aotStringQuery.setCountQuery(query.countQuery());
 				body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
 				body.addCode(
-						JpaCodeBlocks.queryBlockBuilder(context).usingQueryVariableName("query").filter(query.value()).build());
+
+						JpaCodeBlocks.queryBlockBuilder(context).usingQueryVariableName("query").filter(aotStringQuery).build());
 			} else {
 
 				PartTree partTree = new PartTree(context.getMethod().getName(),

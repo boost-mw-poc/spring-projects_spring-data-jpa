@@ -439,6 +439,23 @@ class JpaRepositoryContributorUnitTests {
 		});
 	}
 
+	// native queries
+
+	@Test
+	void nativeQuery() {
+
+		generated.verify(methodInvoker -> {
+
+			Page<String> page = methodInvoker
+				.invoke("findByNativeQueryWithPageable", PageRequest.of(0, 2))
+				.onBean("aotUserRepository");
+
+			assertThat(page.getTotalElements()).isEqualTo(7);
+			assertThat(page.getSize()).isEqualTo(2);
+			assertThat(page.getContent()).containsExactly("Anakin", "Ben");
+		});
+	}
+
 	// old stuff below
 
 	// TODO:

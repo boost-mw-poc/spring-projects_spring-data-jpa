@@ -34,9 +34,11 @@ class AotStringQuery {
 
 	private final String raw;
 	private final String sanitized;
+	private @Nullable String countQuery;
 	private final List<ParameterBinding> parameterBindings;
 	private final Metadata parameterMetadata;
 	private Limit limit;
+	private boolean nativeQuery;
 
 	public AotStringQuery(String raw, String sanitized, List<ParameterBinding> parameterBindings,
 			Metadata parameterMetadata) {
@@ -56,6 +58,12 @@ class AotStringQuery {
 		return new AotStringQuery(raw, targetQuery, bindings, metadata);
 	}
 
+	static AotStringQuery nativeQuery(String raw) {
+		AotStringQuery q = of(raw);
+		q.nativeQuery = true;
+		return q;
+	}
+
 	static AotStringQuery bindable(String query, List<ParameterBinding> bindings) {
 		return new AotStringQuery(query, query, bindings, new Metadata());
 	}
@@ -65,7 +73,11 @@ class AotStringQuery {
 	}
 
 	public String getCountQuery(@Nullable String projection) {
-		return QueryUtils.createCountQueryFor(sanitized, StringUtils.hasText(projection) ? projection : null, false);
+
+		if (StringUtils.hasText(countQuery)) {
+			return countQuery;
+		}
+		return QueryUtils.createCountQueryFor(sanitized, StringUtils.hasText(projection) ? projection : null, nativeQuery);
 	}
 
 	public List<ParameterBinding> parameterBindings() {
@@ -82,5 +94,13 @@ class AotStringQuery {
 
 	public void setLimit(Limit limit) {
 		this.limit = limit;
+	}
+
+	public boolean isNativeQuery() {
+		return nativeQuery;
+	}
+
+	public void setCountQuery(@Nullable String countQuery) {
+		this.countQuery = StringUtils.hasText(countQuery) ? countQuery : null;
 	}
 }

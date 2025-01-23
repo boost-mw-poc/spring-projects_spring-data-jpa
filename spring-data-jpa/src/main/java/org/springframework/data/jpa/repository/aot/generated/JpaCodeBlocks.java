@@ -179,8 +179,8 @@ public class JpaCodeBlocks {
 				if (StringUtils.hasText(sortParameterName)) {
 					builder.beginControlFlow("if($L.isSorted())", sortParameterName);
 
-					builder.addStatement("$T declaredQuery = $T.of($L, false)", DeclaredQuery.class, DeclaredQuery.class,
-							queryStringNameVariableName);
+					builder.addStatement("$T declaredQuery = $T.of($L, $L)", DeclaredQuery.class, DeclaredQuery.class,
+							queryStringNameVariableName, query.isNativeQuery());
 					builder.addStatement("$L = $T.forQuery(declaredQuery).applySorting($L)", queryStringNameVariableName,
 							QueryEnhancerFactory.class, sortParameterName);
 
@@ -188,7 +188,7 @@ public class JpaCodeBlocks {
 				}
 			}
 
-			addQueryBlock(builder, queryVariableName, queryStringNameVariableName);
+			addQueryBlock(builder, queryVariableName, queryStringNameVariableName, query.isNativeQuery());
 
 			if (context.isExistsMethod()) {
 				builder.addStatement("$L.setMaxResults(1)", queryVariableName);
@@ -224,7 +224,7 @@ public class JpaCodeBlocks {
 
 			if (StringUtils.hasText(countQueryStringNameVariableName)) {
 				builder.beginControlFlow("$T $L = () ->", LongSupplier.class, "countAll");
-				addQueryBlock(builder, countQuyerVariableName, countQueryStringNameVariableName);
+				addQueryBlock(builder, countQuyerVariableName, countQueryStringNameVariableName, query.isNativeQuery());
 				builder.addStatement("return ($T) $L.getSingleResult()", Long.class, countQuyerVariableName);
 
 				// end control flow does not work well with lambdas
@@ -235,10 +235,12 @@ public class JpaCodeBlocks {
 			return builder.build();
 		}
 
-		private void addQueryBlock(Builder builder, String queryVariableName, String queryStringNameVariableName) {
+		private void addQueryBlock(Builder builder, String queryVariableName, String queryStringNameVariableName,
+				boolean nativeQuery) {
 
-			builder.addStatement("$T $L = this.$L.createQuery($L)", Query.class, queryVariableName,
-					context.fieldNameOf(EntityManager.class), queryStringNameVariableName);
+			builder.addStatement("$T $L = this.$L.$L($L)", Query.class, queryVariableName,
+					context.fieldNameOf(EntityManager.class), nativeQuery ? "createNativeQuery" : "createQuery",
+					queryStringNameVariableName);
 
 			for (ParameterBinding binding : query.parameterBindings()) {
 

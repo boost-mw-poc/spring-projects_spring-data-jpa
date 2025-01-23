@@ -32,6 +32,7 @@ import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.CodeBlock.Builder;
 import org.springframework.javapoet.TypeName;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
@@ -78,7 +79,20 @@ public class JpaCodeBlocks {
 
 			builder.add("\n");
 
-			if (context.isExistsMethod()) {
+			if (context.isDeleteMethod()) {
+
+				builder.addStatement("$T<$T> resultList = $L.getResultList()", List.class, actualReturnType, queryVariableName);
+				builder.addStatement("resultList.forEach($L::remove)", context.fieldNameOf(EntityManager.class));
+				if (context.returnsSingleValue()) {
+					if (ClassUtils.isAssignable(Number.class, context.getMethod().getReturnType())) {
+						builder.addStatement("return $T.valueOf(resultList.size())", context.getMethod().getReturnType());
+					} else {
+						builder.addStatement("return resultList.isEmpty() ? null : resultList.iterator().next()");
+					}
+				} else {
+					builder.addStatement("return resultList");
+				}
+			} else if (context.isExistsMethod()) {
 				builder.addStatement("return !$L.getResultList().isEmpty()", queryVariableName);
 			} else {
 

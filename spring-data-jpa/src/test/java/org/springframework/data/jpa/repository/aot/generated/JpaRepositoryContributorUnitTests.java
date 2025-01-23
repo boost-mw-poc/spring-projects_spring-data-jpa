@@ -405,6 +405,40 @@ class JpaRepositoryContributorUnitTests {
 		});
 	}
 
+	@Test
+	void testDerivedFinderReturningPageOfProjections() {
+
+		generated.verify(methodInvoker -> {
+
+			Page<UserDtoProjection> page = methodInvoker
+					.invoke("findUserProjectionByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
+					.onBean("aotUserRepository");
+
+			assertThat(page.getTotalElements()).isEqualTo(4);
+			assertThat(page.getSize()).isEqualTo(2);
+			assertThat(page.getContent()).extracting(UserDtoProjection::getEmailAddress).containsExactly("han@smuggler.net",
+					"kylo@new-empire.com");
+		});
+	}
+
+	// modifying
+
+	@Test
+	void testDerivedDeleteSingle() {
+
+		generated.verifyInTx(methodInvoker -> {
+
+			User result = methodInvoker.invoke("deleteByEmailAddress", "yoda@jedi.org").onBean("aotUserRepository");
+
+			assertThat(result).isNotNull().extracting(User::getEmailAddress).isEqualTo("yoda@jedi.org");
+		}).doWithBean(EntityManager.class, em -> {
+			Object yodaShouldBeGone = em
+					.createQuery("SELECT u FROM %s u WHERE u.emailAddress = 'yoda@jedi.org'".formatted(User.class.getName()))
+					.getSingleResultOrNull();
+			assertThat(yodaShouldBeGone).isNull();
+		});
+	}
+
 	// old stuff below
 
 	// TODO:
@@ -421,7 +455,7 @@ class JpaRepositoryContributorUnitTests {
 		// first and max result for pagination
 		// entity graphs
 		// native queries
-		// exists / count / delete
+		// delete
 		// @Modifying
 		// flush / clear
 	}
@@ -477,6 +511,20 @@ class JpaRepositoryContributorUnitTests {
 
 	interface Verifyer {
 		Verifyer verify(Consumer<GeneratedContext> methodInvoker);
+
+		default Verifyer verifyInTx(Consumer<GeneratedContext> methodInvoker) {
+
+			verify(ctx -> {
+
+				PlatformTransactionManager txMgr = ctx.delegate.get().getBean(PlatformTransactionManager.class);
+				new TransactionTemplate(txMgr).execute(action -> {
+					verify(methodInvoker);
+					return "ok";
+				});
+			});
+
+			return this;
+		}
 
 		default <T> void doWithBean(Class<T> type, Consumer<T> runit) {
 			verify(ctx -> {

@@ -24,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.sample.User;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 
@@ -72,9 +73,9 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	List<User> findAnnotatedQueryByLastnameParamter(String lastname);
 
 	@Query("""
- 		select u 
- 		from User u 
- 		where u.lastname LIKE ?1%""")
+			select u
+			from User u
+			where u.lastname LIKE ?1%""")
 	List<User> findAnnotatedMultilineQueryByLastname(String username);
 
 	@Query("select u from User u where u.lastname like ?1%")
@@ -95,9 +96,21 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	@Query("select u from User u where u.lastname like ?1%")
 	Slice<User> findAnnotatedQuerySliceOfUsersByLastname(String lastname, Pageable pageable);
 
+	// modifying
+
+	User deleteByEmailAddress(String username);
+
+	Long deleteReturningDeleteCountByEmailAddress(String username);
+
+	@Modifying
+	@Query("delete from User u where u.emailAddress = ?1")
+	User deleteAnnotatedQueryByEmailAddress(String username);
+
 	// projections
 
 	List<UserDtoProjection> findUserProjectionByLastnameStartingWith(String lastname);
+
+	Page<UserDtoProjection> findUserProjectionByLastnameStartingWith(String lastname, Pageable page);
 
 	// old ones
 

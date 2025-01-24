@@ -77,6 +77,26 @@ class JpaRepositoryContributorUnitTests {
 				.genericBeanDefinition("com.example.UserRepositoryImpl__Aot")
 				.addConstructorArgReference("jpaSharedEM_entityManagerFactory").getBeanDefinition();
 
+
+		/*
+		 alter the RepositoryFactory so we can write generated calsses into a supplier and then write some custom code for instantiation
+		 on JpaRepositoryFactoryBean
+
+		 beanDefinition.getPropertyValues().addPropertyValue("aotImplementation", new Function<BeanFactory, Instance>() {
+
+		 	public Instance apply(BeanFactory beanFactor) {
+		 		EntityManager em = beanFactory.getBean(EntityManger.class);
+		 		return new com.example.UserRepositoryImpl__Aot(em);
+		 	}
+		 });
+		 */
+
+		// register a dedicated factory that can read stuff
+		// don't write to spring.factories or uas another name for it
+		// maybe write the code directly to a repo fragment
+		// repo does not have to be a bean, but can be a method called by some component
+		// pass list to entiy manager to have stuff in memory have to list written out directly when creating the bean
+
 		generated = generateContext(generationContext) //
 				.registerBeansFrom(new ClassPathResource("infrastructure.xml"))
 				.register("jpaSharedEM_entityManagerFactory", emBeanDefinition)

@@ -60,6 +60,7 @@ import org.springframework.data.jpa.repository.support.EntityManagerBeanDefiniti
 import org.springframework.data.jpa.repository.support.JpaEvaluationContextExtension;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactoryBean;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
+import org.springframework.data.repository.aot.generate.RepositoryContributor;
 import org.springframework.data.repository.config.AnnotationRepositoryConfigurationSource;
 import org.springframework.data.repository.config.AotRepositoryContext;
 import org.springframework.data.repository.config.ImplementationDetectionConfiguration;
@@ -326,15 +327,15 @@ public class JpaRepositoryConfigExtension extends RepositoryConfigurationExtensi
 	 */
 	public static class JpaRepositoryRegistrationAotProcessor extends RepositoryRegistrationAotProcessor {
 
-		protected void contribute(AotRepositoryContext repositoryContext, GenerationContext generationContext) {
+		protected RepositoryContributor contribute(AotRepositoryContext repositoryContext, GenerationContext generationContext) {
 
 			// don't register domain types nor annotations.
 
 			if (!AotContext.aotGeneratedRepositoriesEnabled()) {
-				return;
+				return null;
 			}
 
-			new JpaRepsoitoryContributor(repositoryContext).contribute(generationContext);
+			return new JpaRepsoitoryContributor(repositoryContext);
 		}
 
 		@Nullable

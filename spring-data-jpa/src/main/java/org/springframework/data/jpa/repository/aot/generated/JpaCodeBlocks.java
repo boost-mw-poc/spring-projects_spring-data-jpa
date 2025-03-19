@@ -24,10 +24,15 @@ import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
 import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.query.DeclaredQuery;
 import org.springframework.data.jpa.repository.query.ParameterBinding;
+import org.springframework.data.jpa.repository.query.QueryEnhancer;
+import org.springframework.data.jpa.repository.query.QueryEnhancer.QueryRewriteInformation;
 import org.springframework.data.jpa.repository.query.QueryEnhancerFactory;
+import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
+import org.springframework.data.repository.query.ReturnedType;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.CodeBlock.Builder;
@@ -152,6 +157,12 @@ public class JpaCodeBlocks {
 
 		CodeBlock build() {
 
+			boolean isProjecting = context.getActualReturnType() != null
+				&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
+				context.getActualReturnType());
+			Object actualReturnType = isProjecting ? context.getActualReturnType()
+				: context.getRepositoryInformation().getDomainType();
+
 			CodeBlock.Builder builder = CodeBlock.builder();
 			builder.add("\n");
 			String queryStringNameVariableName = "%sString".formatted(queryVariableName);
@@ -179,10 +190,20 @@ public class JpaCodeBlocks {
 				if (StringUtils.hasText(sortParameterName)) {
 					builder.beginControlFlow("if($L.isSorted())", sortParameterName);
 
-					builder.addStatement("$T declaredQuery = $T.of($L, $L)", DeclaredQuery.class, DeclaredQuery.class,
-							queryStringNameVariableName, query.isNativeQuery());
-					builder.addStatement("$L = $T.forQuery(declaredQuery).applySorting($L)", queryStringNameVariableName,
-							QueryEnhancerFactory.class, sortParameterName);
+					if(query.isNativeQuery()) {
+						builder.addStatement("$T declaredQuery = $T.nativeQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
+							queryStringNameVariableName);
+					} else {
+						builder.addStatement("$T declaredQuery = $T.jpqlQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
+							queryStringNameVariableName);
+					}
+
+					String enhancerVarName = "%sEnhancer".formatted(queryStringNameVariableName);
+					builder.addStatement("$T $L = $T.forQuery(declaredQuery).create(declaredQuery)", QueryEnhancer.class, enhancerVarName, QueryEnhancerFactory.class);
+
+					builder.addStatement("$L = $L.rewrite(new $T() { public $T getSort() { return $L; } public $T getReturnedType() { return $T.of($T.class, $T.class, new $T());}  })", queryStringNameVariableName, enhancerVarName, QueryRewriteInformation.class,
+						Sort.class, sortParameterName, ReturnedType.class, ReturnedType.class,
+						context.getRepositoryInformation().getDomainType(), actualReturnType, SpelAwareProxyProjectionFactory.class);
 
 					builder.endControlFlow();
 				}

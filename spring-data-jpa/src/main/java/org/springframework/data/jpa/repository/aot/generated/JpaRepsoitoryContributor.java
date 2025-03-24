@@ -22,14 +22,19 @@ import java.util.regex.Pattern;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.jpa.projection.CollectionAwareProjectionFactory;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.query.QueryEnhancerSelector;
 import org.springframework.data.repository.aot.generate.AotRepositoryConstructorBuilder;
+import org.springframework.data.repository.aot.generate.AotRepositoryImplementationMetadata;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodBuilder;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
 import org.springframework.data.repository.aot.generate.RepositoryContributor;
 import org.springframework.data.repository.config.AotRepositoryContext;
+import org.springframework.data.repository.core.RepositoryInformation;
+import org.springframework.data.repository.core.support.RepositoryFactoryBeanSupport;
 import org.springframework.data.repository.query.ReturnedType;
 import org.springframework.data.repository.query.parser.PartTree;
 import org.springframework.javapoet.TypeName;
+import org.springframework.javapoet.TypeSpec;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
@@ -50,8 +55,20 @@ public class JpaRepsoitoryContributor extends RepositoryContributor {
 	}
 
 	@Override
+	protected void customizeFile(RepositoryInformation information, AotRepositoryImplementationMetadata metadata,
+			TypeSpec.Builder builder) {
+		builder.superclass(TypeName.get(AotRepositoryFragmentSupport.class));
+	}
+
+	@Override
 	protected void customizeConstructor(AotRepositoryConstructorBuilder constructorBuilder) {
-		constructorBuilder.addParameter("entityManager", TypeName.get(EntityManager.class));
+
+		constructorBuilder.addParameter("entityManager", EntityManager.class);
+		constructorBuilder.addParameter("context", RepositoryFactoryBeanSupport.FragmentCreationContext.class);
+		constructorBuilder.customize((repositoryInformation, builder) -> {
+			builder.addStatement("super($T.DEFAULT_SELECTOR, context)", QueryEnhancerSelector.class);
+
+		});
 	}
 
 	@Override

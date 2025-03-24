@@ -15,7 +15,7 @@
  */
 package org.springframework.data.jpa.repository.aot.generated;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
 
 import jakarta.persistence.EntityManager;
 
@@ -30,6 +30,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
 import org.springframework.aot.test.generate.TestGenerationContext;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
@@ -45,6 +46,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.sample.User;
+import org.springframework.data.projection.ProjectionFactory;
+import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
+import org.springframework.data.repository.core.RepositoryMetadata;
+import org.springframework.data.repository.core.support.RepositoryFactoryBeanSupport;
+import org.springframework.data.repository.query.ValueExpressionDelegate;
 import org.springframework.data.util.Lazy;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -73,9 +79,27 @@ class JpaRepositoryContributorUnitTests {
 				.setFactoryMethod("createSharedEntityManager").addConstructorArgReference("entityManagerFactory")
 				.setLazyInit(true).getBeanDefinition();
 
+		RepositoryFactoryBeanSupport.FragmentCreationContext creationContext = new RepositoryFactoryBeanSupport.FragmentCreationContext() {
+			@Override
+			public RepositoryMetadata getRepositoryMetadata() {
+				return aotContext.getRepositoryInformation();
+			}
+
+			@Override
+			public ValueExpressionDelegate getValueExpressionDelegate() {
+				return ValueExpressionDelegate.create();
+			}
+
+			@Override
+			public ProjectionFactory getProjectionFactory() {
+				return new SpelAwareProxyProjectionFactory();
+			}
+		};
+
 		AbstractBeanDefinition aotGeneratedRepository = BeanDefinitionBuilder
 				.genericBeanDefinition("com.example.UserRepositoryImpl__Aot")
-				.addConstructorArgReference("jpaSharedEM_entityManagerFactory").getBeanDefinition();
+				.addConstructorArgReference("jpaSharedEM_entityManagerFactory").addConstructorArgValue(creationContext)
+				.getBeanDefinition();
 
 
 		/*

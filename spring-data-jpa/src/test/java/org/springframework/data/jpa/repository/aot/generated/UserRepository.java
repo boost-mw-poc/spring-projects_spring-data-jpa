@@ -70,7 +70,7 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	List<User> findAnnotatedQueryByLastname(String lastname);
 
 	@Query("select u from User u where u.lastname like :lastname%")
-	List<User> findAnnotatedQueryByLastnameParamter(String lastname);
+	List<User> findAnnotatedQueryByLastnameParameter(String lastname);
 
 	@Query("""
 			select u
@@ -92,6 +92,9 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	@Query("select u from User u where u.lastname like ?1%")
 	Page<User> findAnnotatedQueryPageOfUsersByLastname(String lastname, Pageable pageable);
+
+	@Query("select u from User u where u.lastname like ?1% ORDER BY u.lastname")
+	Page<User> findAnnotatedQueryPageWithStaticSort(String lastname, Pageable pageable);
 
 	@Query("select u from User u where u.lastname like ?1%")
 	Slice<User> findAnnotatedQuerySliceOfUsersByLastname(String lastname, Pageable pageable);

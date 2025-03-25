@@ -207,7 +207,7 @@ public class JpaCodeBlocks {
 
 		private void applySorting(Builder builder, String sort, String queryString, Object actualReturnType) {
 
-			builder.beginControlFlow("if($L.isSorted())", sort);
+			builder.beginControlFlow("if ($L.isSorted())", sort);
 
 			if (query.isNativeQuery()) {
 				builder.addStatement("$T declaredQuery = $T.nativeQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
@@ -233,7 +233,7 @@ public class JpaCodeBlocks {
 			String limit = context.getLimitParameterName();
 
 			if (StringUtils.hasText(limit)) {
-				builder.beginControlFlow("if($L.isLimited())", limit);
+				builder.beginControlFlow("if ($L.isLimited())", limit);
 				builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limit);
 				builder.endControlFlow();
 			} else if (query.isLimited()) {
@@ -244,7 +244,7 @@ public class JpaCodeBlocks {
 
 			if (StringUtils.hasText(pageable)) {
 
-				builder.beginControlFlow("if($L.isPaged())", pageable);
+				builder.beginControlFlow("if ($L.isPaged())", pageable);
 				builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName, pageable);
 				if (context.returnsSlice() && !context.returnsPage()) {
 					builder.addStatement("$L.setMaxResults($L.getPageSize() + 1)", queryVariableName, pageable);

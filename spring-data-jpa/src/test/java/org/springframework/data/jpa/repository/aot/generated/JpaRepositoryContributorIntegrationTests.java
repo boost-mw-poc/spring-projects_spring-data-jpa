@@ -300,6 +300,7 @@ class JpaRepositoryContributorIntegrationTests {
 	@Test
 	void testDerivedFinderReturningPageOfProjections() {
 
+		// TODO: query.setParameter(1, "%s%%".formatted(lastname));
 		Page<UserDtoProjection> page = fragment.findUserProjectionByLastnameStartingWith("S",
 				PageRequest.of(0, 2, Sort.by("emailAddress")));
 
@@ -340,6 +341,9 @@ class JpaRepositoryContributorIntegrationTests {
 
 	// TODO:
 	void todo() {
+
+		// interface projections
+		// named queries
 
 		// query hints
 		// entity graphs

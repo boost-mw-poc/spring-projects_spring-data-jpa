@@ -54,7 +54,7 @@ public class JpaCodeBlocks {
 	static class QueryExecutionBlockBuilder {
 
 		AotRepositoryMethodGenerationContext context;
-		private String queryVariableName;
+		private String queryVariableName = "query";
 
 		public QueryExecutionBlockBuilder(AotRepositoryMethodGenerationContext context) {
 			this.context = context;
@@ -130,8 +130,8 @@ public class JpaCodeBlocks {
 	static class QueryBlockBuilder {
 
 		private final AotRepositoryMethodGenerationContext context;
-		private String queryVariableName;
-		private AotStringQuery query;
+		private String queryVariableName = "query";
+		private AotQueries queries;
 
 		public QueryBlockBuilder(AotRepositoryMethodGenerationContext context) {
 			this.context = context;
@@ -143,12 +143,8 @@ public class JpaCodeBlocks {
 			return this;
 		}
 
-		QueryBlockBuilder filter(String queryString) {
-			return filter(AotStringQuery.of(queryString));
-		}
-
-		QueryBlockBuilder filter(AotStringQuery query) {
-			this.query = query;
+		QueryBlockBuilder filter(AotQueries query) {
+			this.queries = query;
 			return this;
 		}
 
@@ -163,17 +159,21 @@ public class JpaCodeBlocks {
 			CodeBlock.Builder builder = CodeBlock.builder();
 			builder.add("\n");
 			String queryStringNameVariableName = "%sString".formatted(queryVariableName);
+
+			StringAotQuery query = (StringAotQuery) queries.result();
 			builder.addStatement("$T $L = $S", String.class, queryStringNameVariableName, query.getQueryString());
 
 			String countQueryStringNameVariableName = null;
 			String countQuyerVariableName = null;
+
 			if (context.returnsPage()) {
+
 				countQueryStringNameVariableName = "count%sString".formatted(StringUtils.capitalize(queryVariableName));
 				countQuyerVariableName = "count%s".formatted(StringUtils.capitalize(queryVariableName));
-				String projection = context.annotationValue(org.springframework.data.jpa.repository.Query.class,
-						"countProjection");
+
+				StringAotQuery countQuery = (StringAotQuery) queries.count();
 				builder.addStatement("$T $L = $S", String.class, countQueryStringNameVariableName,
-						query.getCountQuery(projection));
+						countQuery.getQueryString());
 			}
 
 			// sorting
@@ -188,13 +188,14 @@ public class JpaCodeBlocks {
 				applySorting(builder, sortParameterName, queryStringNameVariableName, actualReturnType);
 			}
 
-			addQueryBlock(builder, queryVariableName, queryStringNameVariableName, query.isNativeQuery());
+			addQueryBlock(builder, queryVariableName, queryStringNameVariableName, queries.result());
 
 			applyLimits(builder);
 
 			if (StringUtils.hasText(countQueryStringNameVariableName)) {
+
 				builder.beginControlFlow("$T $L = () ->", LongSupplier.class, "countAll");
-				addQueryBlock(builder, countQuyerVariableName, countQueryStringNameVariableName, query.isNativeQuery());
+				addQueryBlock(builder, countQuyerVariableName, countQueryStringNameVariableName, queries.count());
 				builder.addStatement("return ($T) $L.getSingleResult()", Long.class, countQuyerVariableName);
 
 				// end control flow does not work well with lambdas
@@ -209,7 +210,7 @@ public class JpaCodeBlocks {
 
 			builder.beginControlFlow("if ($L.isSorted())", sort);
 
-			if (query.isNativeQuery()) {
+			if (queries.isNative()) {
 				builder.addStatement("$T declaredQuery = $T.nativeQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
 						queryString);
 			} else {
@@ -236,8 +237,8 @@ public class JpaCodeBlocks {
 				builder.beginControlFlow("if ($L.isLimited())", limit);
 				builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limit);
 				builder.endControlFlow();
-			} else if (query.isLimited()) {
-				builder.addStatement("$L.setMaxResults($L)", queryVariableName, query.getLimit().max());
+			} else if (queries.result().isLimited()) {
+				builder.addStatement("$L.setMaxResults($L)", queryVariableName, queries.result().getLimit().max());
 			}
 
 			String pageable = context.getPageableParameterName();
@@ -256,13 +257,13 @@ public class JpaCodeBlocks {
 		}
 
 		private void addQueryBlock(Builder builder, String queryVariableName, String queryStringNameVariableName,
-				boolean nativeQuery) {
+				AotQuery query) {
 
 			builder.addStatement("$T $L = this.$L.$L($L)", Query.class, queryVariableName,
-					context.fieldNameOf(EntityManager.class), nativeQuery ? "createNativeQuery" : "createQuery",
+					context.fieldNameOf(EntityManager.class), query.isNative() ? "createNativeQuery" : "createQuery",
 					queryStringNameVariableName);
 
-			for (ParameterBinding binding : query.parameterBindings()) {
+			for (ParameterBinding binding : query.getParameterBindings()) {
 
 				Object prepare = binding.prepare("s");
 

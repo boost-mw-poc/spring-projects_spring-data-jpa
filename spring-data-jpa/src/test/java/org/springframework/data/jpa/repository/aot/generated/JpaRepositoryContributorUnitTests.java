@@ -19,6 +19,8 @@ import static org.assertj.core.api.Assertions.*;
 
 import jakarta.persistence.EntityManager;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.aot.test.generate.TestGenerationContext;
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
@@ -55,16 +58,15 @@ import org.springframework.data.util.Lazy;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import com.example.UserDtoProjection;
-import com.example.UserRepository;
+import org.springframework.util.ReflectionUtils;
 
 /**
  * @author Christoph Strobl
+ * @author Mark Paluch
  */
 class JpaRepositoryContributorUnitTests {
 
-	private static Verifyer generated;
+	private static Verifier<UserRepository> generated;
 
 	@BeforeAll
 	static void beforeAll() {
@@ -72,7 +74,7 @@ class JpaRepositoryContributorUnitTests {
 		TestJpaAotRepsitoryContext aotContext = new TestJpaAotRepsitoryContext(UserRepository.class, null);
 		TestGenerationContext generationContext = new TestGenerationContext(UserRepository.class);
 
-		new JpaRepsoitoryContributor(aotContext).contribute(generationContext);
+		new JpaRepositoryContributor(aotContext).contribute(generationContext);
 
 		AbstractBeanDefinition emBeanDefinition = BeanDefinitionBuilder
 				.rootBeanDefinition("org.springframework.orm.jpa.SharedEntityManagerCreator")
@@ -97,13 +99,12 @@ class JpaRepositoryContributorUnitTests {
 		};
 
 		AbstractBeanDefinition aotGeneratedRepository = BeanDefinitionBuilder
-				.genericBeanDefinition("com.example.UserRepositoryImpl__Aot")
+				.genericBeanDefinition("org.springframework.data.jpa.repository.aot.generated.UserRepositoryImpl__Aot")
 				.addConstructorArgReference("jpaSharedEM_entityManagerFactory").addConstructorArgValue(creationContext)
 				.getBeanDefinition();
 
-
 		/*
-		 alter the RepositoryFactory so we can write generated calsses into a supplier and then write some custom code for instantiation
+		 alter the RepositoryFactory so we can write generated classes into a supplier and then write some custom code for instantiation
 		 on JpaRepositoryFactoryBean
 
 		 beanDefinition.getPropertyValues().addPropertyValue("aotImplementation", new Function<BeanFactory, Instance>() {
@@ -121,14 +122,14 @@ class JpaRepositoryContributorUnitTests {
 		// repo does not have to be a bean, but can be a method called by some component
 		// pass list to entiy manager to have stuff in memory have to list written out directly when creating the bean
 
-		generated = generateContext(generationContext) //
+		generated = generateContext(generationContext, UserRepository.class) //
 				.registerBeansFrom(new ClassPathResource("infrastructure.xml"))
 				.register("jpaSharedEM_entityManagerFactory", emBeanDefinition)
 				.register("aotUserRepository", aotGeneratedRepository);
 	}
 
 	@BeforeEach
-	public void beforeEach() {
+	void beforeEach() {
 
 		generated.doWithBean(EntityManager.class, em -> {
 
@@ -160,9 +161,9 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testFindDerivedFinderSingleEntity() {
 
-		generated.verify(methodInvoker -> {
+		generated.verify(fragment -> {
 
-			User user = methodInvoker.invoke("findByEmailAddress", "luke@jedi.org").onBean("aotUserRepository");
+			User user = fragment.findByEmailAddress("luke@jedi.org");
 			assertThat(user.getLastname()).isEqualTo("Skywalker");
 		});
 	}
@@ -170,10 +171,9 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testFindDerivedFinderOptionalEntity() {
 
-		generated.verify(methodInvoker -> {
+		generated.verify(fragment -> {
 
-			Optional<User> user = methodInvoker.invoke("findOptionalOneByEmailAddress", "yoda@jedi.org")
-					.onBean("aotUserRepository");
+			Optional<User> user = fragment.findOptionalOneByEmailAddress("yoda@jedi.org");
 			assertThat(user).isNotNull().containsInstanceOf(User.class)
 					.hasValueSatisfying(it -> assertThat(it).extracting(User::getFirstname).isEqualTo("Yoda"));
 		});
@@ -182,9 +182,9 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedCount() {
 
-		generated.verify(methodInvoker -> {
+		generated.verify(fragment -> {
 
-			Long value = methodInvoker.invoke("countUsersByLastname", "Skywalker").onBean("aotUserRepository");
+			Long value = fragment.countUsersByLastname("Skywalker");
 			assertThat(value).isEqualTo(2L);
 		});
 	}
@@ -192,9 +192,9 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedExists() {
 
-		generated.verify(methodInvoker -> {
+		generated.verify(fragment -> {
 
-			Boolean exists = methodInvoker.invoke("existsUserByLastname", "Skywalker").onBean("aotUserRepository");
+			Boolean exists = fragment.existsUserByLastname("Skywalker");
 			assertThat(exists).isTrue();
 		});
 	}
@@ -202,7 +202,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderWithoutArguments() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findUserNoArgumentsBy").onBean("aotUserRepository");
 			assertThat(users).hasSize(7).hasOnlyElementsOfType(User.class);
@@ -212,7 +212,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderReturningList() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S").onBean("aotUserRepository");
 			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("luke@jedi.org", "vader@empire.com",
@@ -223,7 +223,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testLimitedDerivedFinder() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findTop2ByLastnameStartingWith", "S").onBean("aotUserRepository");
 			assertThat(users).hasSize(2);
@@ -233,7 +233,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testSortedDerivedFinder() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findByLastnameStartingWithOrderByEmailAddress", "S")
 					.onBean("aotUserRepository");
@@ -245,7 +245,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderWithLimitArgument() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S", Limit.of(2))
 					.onBean("aotUserRepository");
@@ -256,7 +256,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderWithSort() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S", Sort.by("emailAddress"))
 					.onBean("aotUserRepository");
@@ -268,7 +268,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderWithSortAndLimit() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findByLastnameStartingWith", "S", Sort.by("emailAddress"), Limit.of(2))
 					.onBean("aotUserRepository");
@@ -279,7 +279,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderReturningListWithPageable() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker
 					.invoke("findByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
@@ -291,7 +291,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderReturningPage() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			Page<User> page = methodInvoker
 					.invoke("findPageOfUsersByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
@@ -306,7 +306,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderReturningSlice() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			Slice<User> slice = methodInvoker
 					.invoke("findSliceOfUserByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
@@ -321,7 +321,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderReturningSingleValueWithQuery() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			User user = methodInvoker.invoke("findAnnotatedQueryByEmailAddress", "yoda@jedi.org").onBean("aotUserRepository");
 			assertThat(user).isNotNull().extracting(User::getFirstname).isEqualTo("Yoda");
@@ -331,7 +331,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderReturningListWithQuery() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S").onBean("aotUserRepository");
 			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
@@ -342,7 +342,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderUsingNamedParameterPlaceholderReturningListWithQuery() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastnameParamter", "S").onBean("aotUserRepository");
 			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
@@ -353,7 +353,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedMultilineFinderWithQuery() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findAnnotatedMultilineQueryByLastname", "S").onBean("aotUserRepository");
 			assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("han@smuggler.net",
@@ -364,7 +364,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderWithQueryAndLimit() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S", Limit.of(2))
 					.onBean("aotUserRepository");
@@ -375,7 +375,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderWithQueryAndSort() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S", Sort.by("emailAddress"))
 					.onBean("aotUserRepository");
@@ -387,7 +387,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderWithQueryLimitAndSort() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker.invoke("findAnnotatedQueryByLastname", "S", Limit.of(2), Sort.by("emailAddress"))
 					.onBean("aotUserRepository");
@@ -398,7 +398,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderReturningListWithPageable() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<User> users = methodInvoker
 					.invoke("findAnnotatedQueryByLastname", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
@@ -410,7 +410,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderReturningPage() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			Page<User> page = methodInvoker
 					.invoke("findAnnotatedQueryPageOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
@@ -425,7 +425,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testAnnotatedFinderReturningSlice() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			Slice<User> slice = methodInvoker
 					.invoke("findAnnotatedQuerySliceOfUsersByLastname", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
@@ -440,7 +440,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderReturningListOfProjections() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			List<UserDtoProjection> users = methodInvoker.invoke("findUserProjectionByLastnameStartingWith", "S")
 					.onBean("aotUserRepository");
@@ -452,7 +452,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedFinderReturningPageOfProjections() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
 			Page<UserDtoProjection> page = methodInvoker
 					.invoke("findUserProjectionByLastnameStartingWith", "S", PageRequest.of(0, 2, Sort.by("emailAddress")))
@@ -470,7 +470,7 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void testDerivedDeleteSingle() {
 
-		generated.verifyInTx(methodInvoker -> {
+		generated.runTransactional(methodInvoker -> {
 
 			User result = methodInvoker.invoke("deleteByEmailAddress", "yoda@jedi.org").onBean("aotUserRepository");
 
@@ -488,11 +488,9 @@ class JpaRepositoryContributorUnitTests {
 	@Test
 	void nativeQuery() {
 
-		generated.verify(methodInvoker -> {
+		generated.run(methodInvoker -> {
 
-			Page<String> page = methodInvoker
-				.invoke("findByNativeQueryWithPageable", PageRequest.of(0, 2))
-				.onBean("aotUserRepository");
+			Page<String> page = methodInvoker.target().findByNativeQueryWithPageable(PageRequest.of(0, 2));
 
 			assertThat(page.getTotalElements()).isEqualTo(7);
 			assertThat(page.getSize()).isEqualTo(2);
@@ -521,19 +519,22 @@ class JpaRepositoryContributorUnitTests {
 		// flush / clear
 	}
 
-	static GeneratedContextBuilder generateContext(TestGenerationContext generationContext) {
-		return new GeneratedContextBuilder(generationContext);
+	static <T> GeneratedContextBuilder<T> generateContext(TestGenerationContext generationContext, Class<T> facade) {
+		return new GeneratedContextBuilder<T>(generationContext, facade, "aotUserRepository");
 	}
 
-	static class GeneratedContextBuilder implements Verifyer {
+	static class GeneratedContextBuilder<T> implements Verifier<T> {
 
+		private final Class<T> facade;
 		TestGenerationContext generationContext;
 		Map<String, BeanDefinition> beanDefinitions = new LinkedHashMap<>();
 		Resource xmlBeanDefinitions;
 		Lazy<DefaultListableBeanFactory> lazyFactory;
+		private final String beanName;
 
-		public GeneratedContextBuilder(TestGenerationContext generationContext) {
+		public GeneratedContextBuilder(TestGenerationContext generationContext, Class<T> facade, String beanName) {
 
+			this.facade = facade;
 			this.generationContext = generationContext;
 			this.lazyFactory = Lazy.of(() -> {
 				DefaultListableBeanFactory freshBeanFactory = new DefaultListableBeanFactory();
@@ -551,35 +552,47 @@ class JpaRepositoryContributorUnitTests {
 				});
 				return freshBeanFactory;
 			});
+			this.beanName = beanName;
 		}
 
-		GeneratedContextBuilder register(String name, BeanDefinition beanDefinition) {
+		GeneratedContextBuilder<T> register(String name, BeanDefinition beanDefinition) {
 			this.beanDefinitions.put(name, beanDefinition);
 			return this;
 		}
 
-		GeneratedContextBuilder registerBeansFrom(Resource xmlBeanDefinitions) {
+		GeneratedContextBuilder<T> registerBeansFrom(Resource xmlBeanDefinitions) {
 			this.xmlBeanDefinitions = xmlBeanDefinitions;
 			return this;
 		}
 
-		public Verifyer verify(Consumer<GeneratedContext> methodInvoker) {
-			methodInvoker.accept(new GeneratedContext(lazyFactory));
+		public Verifier<T> run(Consumer<GeneratedContext<T>> methodInvoker) {
+			methodInvoker.accept(new GeneratedContext<>(lazyFactory, facade, beanName));
+			return this;
+		}
+	}
+
+	/**
+	 * AOT Repository Fragment Verifier.
+	 *
+	 * @param <T>
+	 */
+	interface Verifier<T> {
+
+		default Verifier<T> verify(Consumer<T> facadeConsumer) {
+			run(ctx -> {
+				facadeConsumer.accept(ctx.target());
+			});
 			return this;
 		}
 
-	}
+		default Verifier<T> verifyTransactional(Consumer<T> facadeConsumer) {
 
-	interface Verifyer {
-		Verifyer verify(Consumer<GeneratedContext> methodInvoker);
-
-		default Verifyer verifyInTx(Consumer<GeneratedContext> methodInvoker) {
-
-			verify(ctx -> {
+			run(ctx -> {
 
 				PlatformTransactionManager txMgr = ctx.delegate.get().getBean(PlatformTransactionManager.class);
 				new TransactionTemplate(txMgr).execute(action -> {
-					verify(methodInvoker);
+
+					facadeConsumer.accept(ctx.target());
 					return "ok";
 				});
 			});
@@ -587,11 +600,27 @@ class JpaRepositoryContributorUnitTests {
 			return this;
 		}
 
-		default <T> void doWithBean(Class<T> type, Consumer<T> runit) {
-			verify(ctx -> {
+		Verifier<T> run(Consumer<GeneratedContext<T>> methodInvoker);
+
+		default Verifier<T> runTransactional(Consumer<GeneratedContext<T>> methodInvoker) {
+
+			run(ctx -> {
+
+				PlatformTransactionManager txMgr = ctx.delegate.get().getBean(PlatformTransactionManager.class);
+				new TransactionTemplate(txMgr).execute(action -> {
+					run(methodInvoker);
+					return "ok";
+				});
+			});
+
+			return this;
+		}
+
+		default <R> void doWithBean(Class<R> type, Consumer<R> runit) {
+			run(ctx -> {
 
 				boolean isEntityManager = type == EntityManager.class;
-				T bean = ctx.delegate.get().getBean(type);
+				R bean = ctx.delegate.get().getBean(type);
 
 				if (!isEntityManager) {
 					runit.accept(bean);
@@ -608,12 +637,46 @@ class JpaRepositoryContributorUnitTests {
 		}
 	}
 
-	static class GeneratedContext {
+	static class GeneratedContext<T> {
 
-		private Supplier<DefaultListableBeanFactory> delegate;
+		private final Supplier<? extends BeanFactory> delegate;
+		private final Lazy<T> facade;
 
-		public GeneratedContext(Supplier<DefaultListableBeanFactory> defaultListableBeanFactory) {
-			this.delegate = defaultListableBeanFactory;
+		public GeneratedContext(Supplier<? extends BeanFactory> beanFactory, Class<T> facade, String beanName) {
+
+			this.delegate = beanFactory;
+
+			this.facade = Lazy.of(() -> {
+
+				Object bean = beanFactory.get().getBean(beanName);
+				return (T) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[] { facade },
+						(proxy, method, args) -> {
+
+							Method target = ReflectionUtils.findMethod(bean.getClass(), method.getName(), method.getParameterTypes());
+
+							if (target == null) {
+								throw new NoSuchMethodException("Method [%s] is not implemented by [%s]".formatted(method, target));
+							}
+
+							try {
+								return target.invoke(bean, args);
+							} catch (ReflectiveOperationException e) {
+								ReflectionUtils.handleReflectionException(e);
+							}
+
+							return null;
+						});
+			});
+
+		}
+
+		/**
+		 * Interface facade proxyfor invoking methods.
+		 *
+		 * @return
+		 */
+		T target() {
+			return facade.get();
 		}
 
 		InvocationBuilder invoke(String method, Object... arguments) {
@@ -621,9 +684,7 @@ class JpaRepositoryContributorUnitTests {
 			return new InvocationBuilder() {
 				@Override
 				public <T> T onBean(String beanName) {
-					DefaultListableBeanFactory defaultListableBeanFactory = delegate.get();
-
-					Object bean = defaultListableBeanFactory.getBean(beanName);
+					Object bean = delegate.get().getBean(beanName);
 					return ReflectionTestUtils.invokeMethod(bean, method, arguments);
 				}
 			};

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 the original author or authors.
+ * Copyright 2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.example;
+package org.springframework.data.jpa.repository.aot.generated;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,7 +27,6 @@ import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
-import org.springframework.data.repository.query.Param;
 
 /**
  * @author Christoph Strobl
@@ -42,7 +41,7 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	Long countUsersByLastname(String lastname);
 
-	Boolean existsUserByLastname(String lastname);
+	boolean existsUserByLastname(String lastname);
 
 	List<User> findByLastnameStartingWith(String lastname);
 
@@ -115,8 +114,6 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	// projections
 
-
-
 	List<UserDtoProjection> findUserProjectionByLastnameStartingWith(String lastname);
 
 	Page<UserDtoProjection> findUserProjectionByLastnameStartingWith(String lastname, Pageable page);
@@ -137,4 +134,5 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	List<User> findByLastnameOrderByFirstname(String lastname);
 
 	User findByEmailAddress(String emailAddress);
+
 }

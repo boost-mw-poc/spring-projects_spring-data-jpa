@@ -24,15 +24,9 @@ import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
 import org.springframework.data.domain.SliceImpl;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.query.DeclaredQuery;
 import org.springframework.data.jpa.repository.query.ParameterBinding;
-import org.springframework.data.jpa.repository.query.QueryEnhancer;
-import org.springframework.data.jpa.repository.query.QueryEnhancer.QueryRewriteInformation;
-import org.springframework.data.jpa.repository.query.QueryEnhancerFactory;
-import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
-import org.springframework.data.repository.query.ReturnedType;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.CodeBlock.Builder;
@@ -130,6 +124,9 @@ public class JpaCodeBlocks {
 		}
 	}
 
+	/**
+	 * Builder for the actual query code block.
+	 */
 	static class QueryBlockBuilder {
 
 		private final AotRepositoryMethodGenerationContext context;
@@ -158,10 +155,10 @@ public class JpaCodeBlocks {
 		CodeBlock build() {
 
 			boolean isProjecting = context.getActualReturnType() != null
-				&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
-				context.getActualReturnType());
+					&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
+							context.getActualReturnType());
 			Object actualReturnType = isProjecting ? context.getActualReturnType()
-				: context.getRepositoryInformation().getDomainType();
+					: context.getRepositoryInformation().getDomainType();
 
 			CodeBlock.Builder builder = CodeBlock.builder();
 			builder.add("\n");
@@ -181,67 +178,19 @@ public class JpaCodeBlocks {
 
 			// sorting
 			// TODO: refactor into sort builder
-			{
-				String sortParameterName = context.getSortParameterName();
-				if (sortParameterName == null && context.getPageableParameterName() != null) {
-					sortParameterName = "%s.getSort()".formatted(context.getPageableParameterName());
-				}
 
-				if (StringUtils.hasText(sortParameterName)) {
-					builder.beginControlFlow("if($L.isSorted())", sortParameterName);
+			String sortParameterName = context.getSortParameterName();
+			if (sortParameterName == null && context.getPageableParameterName() != null) {
+				sortParameterName = "%s.getSort()".formatted(context.getPageableParameterName());
+			}
 
-					if(query.isNativeQuery()) {
-						builder.addStatement("$T declaredQuery = $T.nativeQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
-							queryStringNameVariableName);
-					} else {
-						builder.addStatement("$T declaredQuery = $T.jpqlQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
-							queryStringNameVariableName);
-					}
-
-					String enhancerVarName = "%sEnhancer".formatted(queryStringNameVariableName);
-					builder.addStatement("$T $L = $T.forQuery(declaredQuery).create(declaredQuery)", QueryEnhancer.class, enhancerVarName, QueryEnhancerFactory.class);
-
-					builder.addStatement("$L = $L.rewrite(new $T() { public $T getSort() { return $L; } public $T getReturnedType() { return $T.of($T.class, $T.class, new $T());}  })", queryStringNameVariableName, enhancerVarName, QueryRewriteInformation.class,
-						Sort.class, sortParameterName, ReturnedType.class, ReturnedType.class,
-						context.getRepositoryInformation().getDomainType(), actualReturnType, SpelAwareProxyProjectionFactory.class);
-
-					builder.endControlFlow();
-				}
+			if (StringUtils.hasText(sortParameterName)) {
+				applySorting(builder, sortParameterName, queryStringNameVariableName, actualReturnType);
 			}
 
 			addQueryBlock(builder, queryVariableName, queryStringNameVariableName, query.isNativeQuery());
 
-			if (context.isExistsMethod()) {
-				builder.addStatement("$L.setMaxResults(1)", queryVariableName);
-			} else {
-
-				{
-					String limitParameterName = context.getLimitParameterName();
-
-					if (StringUtils.hasText(limitParameterName)) {
-						builder.beginControlFlow("if($L.isLimited())", limitParameterName);
-						builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limitParameterName);
-						builder.endControlFlow();
-					} else if (query.isLimited()) {
-						builder.addStatement("$L.setMaxResults($L)", queryVariableName, query.getLimit().max());
-					}
-				}
-
-				{
-					String pageableParamterName = context.getPageableParameterName();
-					if (StringUtils.hasText(pageableParamterName)) {
-						builder.beginControlFlow("if($L.isPaged())", pageableParamterName);
-						builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName,
-								pageableParamterName);
-						if (context.returnsSlice() && !context.returnsPage()) {
-							builder.addStatement("$L.setMaxResults($L.getPageSize() + 1)", queryVariableName, pageableParamterName);
-						} else {
-							builder.addStatement("$L.setMaxResults($L.getPageSize())", queryVariableName, pageableParamterName);
-						}
-						builder.endControlFlow();
-					}
-				}
-			}
+			applyLimits(builder);
 
 			if (StringUtils.hasText(countQueryStringNameVariableName)) {
 				builder.beginControlFlow("$T $L = () ->", LongSupplier.class, "countAll");
@@ -256,6 +205,56 @@ public class JpaCodeBlocks {
 			return builder.build();
 		}
 
+		private void applySorting(Builder builder, String sort, String queryString, Object actualReturnType) {
+
+			builder.beginControlFlow("if($L.isSorted())", sort);
+
+			if (query.isNativeQuery()) {
+				builder.addStatement("$T declaredQuery = $T.nativeQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
+						queryString);
+			} else {
+				builder.addStatement("$T declaredQuery = $T.jpqlQuery($L)", DeclaredQuery.class, DeclaredQuery.class,
+						queryString);
+			}
+
+			builder.addStatement("$L = rewriteQuery(declaredQuery, $L, $T.class)", queryString, sort, actualReturnType);
+
+			builder.endControlFlow();
+		}
+
+		private void applyLimits(Builder builder) {
+
+			if (context.isExistsMethod()) {
+				builder.addStatement("$L.setMaxResults(1)", queryVariableName);
+
+				return;
+			}
+
+			String limit = context.getLimitParameterName();
+
+			if (StringUtils.hasText(limit)) {
+				builder.beginControlFlow("if($L.isLimited())", limit);
+				builder.addStatement("$L.setMaxResults($L.max())", queryVariableName, limit);
+				builder.endControlFlow();
+			} else if (query.isLimited()) {
+				builder.addStatement("$L.setMaxResults($L)", queryVariableName, query.getLimit().max());
+			}
+
+			String pageable = context.getPageableParameterName();
+
+			if (StringUtils.hasText(pageable)) {
+
+				builder.beginControlFlow("if($L.isPaged())", pageable);
+				builder.addStatement("$L.setFirstResult(Long.valueOf($L.getOffset()).intValue())", queryVariableName, pageable);
+				if (context.returnsSlice() && !context.returnsPage()) {
+					builder.addStatement("$L.setMaxResults($L.getPageSize() + 1)", queryVariableName, pageable);
+				} else {
+					builder.addStatement("$L.setMaxResults($L.getPageSize())", queryVariableName, pageable);
+				}
+				builder.endControlFlow();
+			}
+		}
+
 		private void addQueryBlock(Builder builder, String queryVariableName, String queryStringNameVariableName,
 				boolean nativeQuery) {
 
@@ -266,6 +265,7 @@ public class JpaCodeBlocks {
 			for (ParameterBinding binding : query.parameterBindings()) {
 
 				Object prepare = binding.prepare("s");
+
 				if (prepare instanceof String prepared && !prepared.equals("s")) {
 					String format = prepared.replaceAll("%", "%%").replace("s", "%s");
 					if (binding.getIdentifier().hasPosition()) {

@@ -32,7 +32,7 @@ import org.springframework.data.repository.query.parser.PartTree;
  * @author Christoph Strobl
  * @since 2025/01
  */
-public class AotQueryCreator {
+class AotQueryCreator {
 
 	Metamodel metamodel;
 
@@ -55,6 +55,8 @@ public class AotQueryCreator {
 		if (partTree.isLimiting()) {
 			query.setLimit(partTree.getResultLimit());
 		}
+
+		// TODO: Derived count query
 		query.setCountQuery(context.annotationValue(Query.class, "countQuery"));
 		return query;
 	}

@@ -48,6 +48,7 @@ class JpaRepositoryContributorIntegrationTests {
 
 	@Autowired UserRepository fragment;
 	@Autowired EntityManager em;
+	User luke, leia, han, chewbacca, yoda, vader, kylo;
 
 	@Configuration
 	static class JpaRepositoryContributorConfiguration extends AotFragmentTestConfigurationSupport {
@@ -61,25 +62,25 @@ class JpaRepositoryContributorIntegrationTests {
 
 		em.createQuery("DELETE FROM %s".formatted(User.class.getName())).executeUpdate();
 
-		User luke = new User("Luke", "Skywalker", "luke@jedi.org");
+		luke = new User("Luke", "Skywalker", "luke@jedi.org");
 		em.persist(luke);
 
-		User leia = new User("Leia", "Organa", "leia@resistance.gov");
+		leia = new User("Leia", "Organa", "leia@resistance.gov");
 		em.persist(leia);
 
-		User han = new User("Han", "Solo", "han@smuggler.net");
+		han = new User("Han", "Solo", "han@smuggler.net");
 		em.persist(han);
 
-		User chewbacca = new User("Chewbacca", "n/a", "chewie@smuggler.net");
+		chewbacca = new User("Chewbacca", "n/a", "chewie@smuggler.net");
 		em.persist(chewbacca);
 
-		User yoda = new User("Yoda", "n/a", "yoda@jedi.org");
+		yoda = new User("Yoda", "n/a", "yoda@jedi.org");
 		em.persist(yoda);
 
-		User vader = new User("Anakin", "Skywalker", "vader@empire.com");
+		vader = new User("Anakin", "Skywalker", "vader@empire.com");
 		em.persist(vader);
 
-		User kylo = new User("Ben", "Solo", "kylo@new-empire.com");
+		kylo = new User("Ben", "Solo", "kylo@new-empire.com");
 		em.persist(kylo);
 	}
 
@@ -386,6 +387,14 @@ class JpaRepositoryContributorIntegrationTests {
 		assertThat(page.getContent()).containsExactly("Anakin", "Ben");
 	}
 
+	@Test
+	void shouldApplySqlResultSetMapping() {
+
+		User.EmailDto result = fragment.findEmailDtoByNativeQuery(kylo.getId());
+
+		assertThat(result.getOne()).isEqualTo(kylo.getEmailAddress());
+	}
+
 	// old stuff below
 
 	void todo() {
@@ -397,7 +406,6 @@ class JpaRepositoryContributorIntegrationTests {
 		// class type parameter
 
 		// entity graphs
-		// native queries
 		// delete
 		// @Modifying
 		// flush / clear

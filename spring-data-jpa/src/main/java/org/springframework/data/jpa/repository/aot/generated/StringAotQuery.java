@@ -40,10 +40,10 @@ abstract class StringAotQuery extends AotQuery {
 	static StringAotQuery of(DeclaredQuery query) {
 
 		if (query instanceof PreprocessedQuery pq) {
-			return new DeclaredAotQuery(pq);
+			return new DeclaredAotQuery(pq, false);
 		}
 
-		return new DeclaredAotQuery(PreprocessedQuery.parse(query));
+		return new DeclaredAotQuery(PreprocessedQuery.parse(query), false);
 	}
 
 	/**
@@ -78,10 +78,19 @@ abstract class StringAotQuery extends AotQuery {
 		return getQuery().getQueryString();
 	}
 
+	/**
+	 * @return {@literal true} if query is expected to return the declared method type directly; {@literal false} if the
+	 *         result requires projection post-processing. See also {@code NativeJpaQuery#getTypeToQueryFor}.
+	 */
+	public abstract boolean returnsDeclaredMethodType();
+
+	public abstract StringAotQuery withReturnsDeclaredMethodType();
+
 	@Override
 	public String toString() {
 		return getQueryString();
 	}
+
 
 	/**
 	 * @author Christoph Strobl
@@ -90,10 +99,17 @@ abstract class StringAotQuery extends AotQuery {
 	static class DeclaredAotQuery extends StringAotQuery {
 
 		private final PreprocessedQuery query;
+		private final boolean returnsDeclaredMethodType;
 
-		DeclaredAotQuery(PreprocessedQuery query) {
+		DeclaredAotQuery(PreprocessedQuery query, boolean returnsDeclaredMethodType) {
 			super(query.getBindings());
 			this.query = query;
+			this.returnsDeclaredMethodType = returnsDeclaredMethodType;
+		}
+
+		@Override
+		public PreprocessedQuery getQuery() {
+			return query;
 		}
 
 		@Override
@@ -106,8 +122,14 @@ abstract class StringAotQuery extends AotQuery {
 			return query.isNative();
 		}
 
-		public PreprocessedQuery getQuery() {
-			return query;
+		@Override
+		public boolean returnsDeclaredMethodType() {
+			return returnsDeclaredMethodType;
+		}
+
+		@Override
+		public StringAotQuery withReturnsDeclaredMethodType() {
+			return new DeclaredAotQuery(query, returnsDeclaredMethodType);
 		}
 
 	}
@@ -146,6 +168,16 @@ abstract class StringAotQuery extends AotQuery {
 		@Override
 		public Limit getLimit() {
 			return limit;
+		}
+
+		@Override
+		public boolean returnsDeclaredMethodType() {
+			return true;
+		}
+
+		@Override
+		public StringAotQuery withReturnsDeclaredMethodType() {
+			return this;
 		}
 
 	}

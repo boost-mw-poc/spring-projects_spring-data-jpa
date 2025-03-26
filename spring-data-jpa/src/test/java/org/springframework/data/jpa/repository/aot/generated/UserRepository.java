@@ -27,6 +27,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.sample.User;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.CrudRepository;
@@ -115,6 +116,10 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	@Query("select u from User u where u.emailAddress = ?#{[0]} or u.firstname = ?${user.dir}")
 	User findValueExpressionPositionalByEmailAddress(String emailAddress);
+
+	@NativeQuery(value = "SELECT emailaddress, secondary_email_address FROM SD_User WHERE id = ?1",
+			sqlResultSetMapping = "emailDto")
+	User.EmailDto findEmailDtoByNativeQuery(Integer id);
 
 	// modifying
 

@@ -16,9 +16,13 @@
 package org.springframework.data.jpa.repository.aot.generated;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
 
+import java.lang.reflect.Method;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
+
+import org.jspecify.annotations.Nullable;
 
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.MergedAnnotation;
@@ -29,6 +33,7 @@ import org.springframework.data.jpa.projection.CollectionAwareProjectionFactory;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.jpa.repository.query.EntityQuery;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.data.jpa.repository.query.JpaCountQueryCreator;
 import org.springframework.data.jpa.repository.query.JpaParameters;
@@ -114,44 +119,25 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			MergedAnnotation<NativeQuery> nativeQuery = annotations.get(NativeQuery.class);
 			MergedAnnotation<QueryHints> queryHints = annotations.get(QueryHints.class);
 
+			ReturnedType returnedType = getReturnedType(context);
+
 			body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
 			AotQueries aotQueries;
 			if (query.isPresent() && StringUtils.hasText(query.getString("value"))) {
 				aotQueries = buildStringQuery(context.getRepositoryInformation().getDomainType(), selector, query);
 			} else {
-				aotQueries = buildPartTreeQuery(context, query);
+				aotQueries = buildPartTreeQuery(returnedType, context, query);
 			}
 
-			body.addCode(JpaCodeBlocks.queryBuilder(context).filter(aotQueries).queryHints(queryHints).build());
+			body.addCode(JpaCodeBlocks.queryBuilder(context).filter(aotQueries)
+					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).query(query)
+					.nativeQuery(nativeQuery).queryHints(queryHints).build());
 			body.addCode(JpaCodeBlocks.executionBuilder(context).build());
 		});
 	}
 
-	private AotQueries buildStringQuery(Class<?> domainType, QueryEnhancerSelector selector,
-			MergedAnnotation<Query> query) {
-
-		UnaryOperator<String> operator = s -> s.replaceAll("#\\{#entityName}", domainType.getName());
-		Function<String, StringAotQuery> queryFunction = query.getBoolean("nativeQuery") ? StringAotQuery::nativeQuery
-				: StringAotQuery::jpqlQuery;
-		queryFunction = operator.andThen(queryFunction);
-
-		StringAotQuery aotStringQuery = queryFunction.apply(query.getString("value"));
-		String countQuery = query.getString("countQuery");
-
-		if (StringUtils.hasText(countQuery)) {
-			return AotQueries.from(aotStringQuery, queryFunction.apply(countQuery));
-		}
-
-		String countProjection = query.getString("countProjection");
-		return AotQueries.from(aotStringQuery, countProjection, selector);
-	}
-
-	private AotQueries buildPartTreeQuery(AotRepositoryMethodGenerationContext context, MergedAnnotation<Query> query) {
-
-		PartTree partTree = new PartTree(context.getMethod().getName(), context.getRepositoryInformation().getDomainType());
-		// TODO make configurable
-		JpqlQueryTemplates templates = JpqlQueryTemplates.UPPER;
+	private ReturnedType getReturnedType(AotRepositoryMethodGenerationContext context) {
 
 		boolean isProjecting = context.getActualReturnType() != null
 				&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
@@ -166,8 +152,39 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			throw new RuntimeException(e);
 		}
 
-		ReturnedType returnedType = ReturnedType.of(actualReturnType, context.getRepositoryInformation().getDomainType(),
-				projectionFactory);
+		return ReturnedType.of(actualReturnType, context.getRepositoryInformation().getDomainType(), projectionFactory);
+	}
+
+	private AotQueries buildStringQuery(Class<?> domainType, QueryEnhancerSelector selector,
+			MergedAnnotation<Query> query) {
+
+		UnaryOperator<String> operator = s -> s.replaceAll("#\\{#entityName}", domainType.getName());
+		Function<String, StringAotQuery> queryFunction = query.getBoolean("nativeQuery") ? StringAotQuery::nativeQuery
+				: StringAotQuery::jpqlQuery;
+		queryFunction = operator.andThen(queryFunction);
+
+		StringAotQuery aotStringQuery = queryFunction.apply(query.getString("value"));
+		String countQuery = query.getString("countQuery");
+
+		EntityQuery entityQuery = EntityQuery.create(aotStringQuery.getQuery(), selector);
+		if (entityQuery.hasConstructorExpression() || entityQuery.isDefaultProjection()) {
+			aotStringQuery = aotStringQuery.withReturnsDeclaredMethodType();
+		}
+
+		if (StringUtils.hasText(countQuery)) {
+			return AotQueries.from(aotStringQuery, queryFunction.apply(countQuery));
+		}
+
+		String countProjection = query.getString("countProjection");
+		return AotQueries.from(aotStringQuery, countProjection, selector);
+	}
+
+	private AotQueries buildPartTreeQuery(ReturnedType returnedType, AotRepositoryMethodGenerationContext context,
+			MergedAnnotation<Query> query) {
+
+		PartTree partTree = new PartTree(context.getMethod().getName(), context.getRepositoryInformation().getDomainType());
+		// TODO make configurable
+		JpqlQueryTemplates templates = JpqlQueryTemplates.UPPER;
 
 		ParametersSource parametersSource = ParametersSource.of(context.getRepositoryInformation(), context.getMethod());
 		JpaParameters parameters = new JpaParameters(parametersSource);
@@ -202,6 +219,33 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 				metaModel);
 
 		return StringAotQuery.jpqlQuery(queryCreator.createQuery(), metadataProvider.getBindings(), null);
+	}
+
+	private static @Nullable Class<?> getQueryReturnType(AotQuery query, ReturnedType returnedType,
+			AotRepositoryMethodGenerationContext context) {
+
+		Method method = context.getMethod();
+		RepositoryInformation repositoryInformation = context.getRepositoryInformation();
+
+		Class<?> methodReturnType = repositoryInformation.getReturnedDomainClass(method);
+		boolean queryForEntity = repositoryInformation.getDomainType().isAssignableFrom(methodReturnType);
+
+		Class<?> result = queryForEntity ? returnedType.getDomainType() : null;
+
+		if (query instanceof StringAotQuery sq && sq.returnsDeclaredMethodType()) {
+			return result;
+		}
+
+		if (returnedType.isProjecting()) {
+
+			if (returnedType.getReturnedType().isInterface()) {
+				return Tuple.class;
+			}
+
+			return returnedType.getReturnedType();
+		}
+
+		return result;
 	}
 
 }

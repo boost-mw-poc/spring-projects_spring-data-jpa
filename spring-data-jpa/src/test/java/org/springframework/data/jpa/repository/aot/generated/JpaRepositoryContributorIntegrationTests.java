@@ -363,6 +363,8 @@ class JpaRepositoryContributorIntegrationTests {
 
 	void todo() {
 
+		// expressions, templated query with #{#entityName}
+		// synthetic parameters (keyset scrolling! yuck!)
 		// interface projections
 		// named queries
 		// dynamic projections

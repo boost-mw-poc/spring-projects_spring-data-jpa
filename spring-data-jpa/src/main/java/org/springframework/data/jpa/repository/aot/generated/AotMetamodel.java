@@ -96,6 +96,7 @@ class AotMetamodel implements Metamodel {
 		return entityManager.get();
 	}
 
+	// TODO: Capture an existing factory bean (e.g. EntityManagerFactoryInfo) to extract PersistenceInfo
 	EntityManagerFactory init() {
 
 		MutablePersistenceUnitInfo persistenceUnitInfo = new MutablePersistenceUnitInfo() {

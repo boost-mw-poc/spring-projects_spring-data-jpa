@@ -38,7 +38,7 @@ import org.springframework.orm.jpa.persistenceunit.MutablePersistenceUnitInfo;
  * @author Christoph Strobl
  * @since 4.0
  */
-class AotMM implements Metamodel {
+class AotMetamodel implements Metamodel {
 
 	private final String persistenceUnit;
 	private final Set<Class<?>> managedTypes;
@@ -46,21 +46,21 @@ class AotMM implements Metamodel {
 	private final Lazy<Metamodel> metamodel = Lazy.of(() -> entityManagerFactory.get().getMetamodel());
 	private final Lazy<EntityManager> entityManager = Lazy.of(() -> entityManagerFactory.get().createEntityManager());
 
-	public AotMM(Set<Class<?>> managedTypes) {
+	public AotMetamodel(Set<Class<?>> managedTypes) {
 		this("dynamic-tests", managedTypes);
 	}
 
-	private AotMM(String persistenceUnit, Set<Class<?>> managedTypes) {
+	private AotMetamodel(String persistenceUnit, Set<Class<?>> managedTypes) {
 		this.persistenceUnit = persistenceUnit;
 		this.managedTypes = managedTypes;
 	}
 
-	public static AotMM hibernateModel(Class<?>... types) {
-		return new AotMM(Set.of(types));
+	public static AotMetamodel hibernateModel(Class<?>... types) {
+		return new AotMetamodel(Set.of(types));
 	}
 
-	public static AotMM hibernateModel(String persistenceUnit, Class<?>... types) {
-		return new AotMM(persistenceUnit, Set.of(types));
+	public static AotMetamodel hibernateModel(String persistenceUnit, Class<?>... types) {
+		return new AotMetamodel(persistenceUnit, Set.of(types));
 	}
 
 	public <X> EntityType<X> entity(Class<X> cls) {

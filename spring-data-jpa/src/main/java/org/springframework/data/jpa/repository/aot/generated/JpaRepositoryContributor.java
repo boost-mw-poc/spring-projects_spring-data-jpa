@@ -72,12 +72,12 @@ import org.springframework.util.StringUtils;
 public class JpaRepositoryContributor extends RepositoryContributor {
 
 	private final CollectionAwareProjectionFactory projectionFactory = new CollectionAwareProjectionFactory();
-	private final AotMM metaModel;
+	private final AotMetamodel metaModel;
 
 	public JpaRepositoryContributor(AotRepositoryContext repositoryContext) {
 		super(repositoryContext);
 
-		this.metaModel = new AotMM(repositoryContext.getResolvedTypes());
+		this.metaModel = new AotMetamodel(repositoryContext.getResolvedTypes());
 	}
 
 	@Override

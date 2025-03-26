@@ -105,6 +105,17 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	@Query("select u from User u where u.lastname like ?1%")
 	Slice<User> findAnnotatedQuerySliceOfUsersByLastname(String lastname, Pageable pageable);
 
+	// Value Expressions
+
+	@Query("select u from #{#entityName} u where u.emailAddress = ?1")
+	User findTemplatedByEmailAddress(String emailAddress);
+
+	@Query("select u from User u where u.emailAddress = :#{#emailAddress}")
+	User findValueExpressionNamedByEmailAddress(String emailAddress);
+
+	@Query("select u from User u where u.emailAddress = ?#{[0]} or u.firstname = ?${user.dir}")
+	User findValueExpressionPositionalByEmailAddress(String emailAddress);
+
 	// modifying
 
 	User deleteByEmailAddress(String username);

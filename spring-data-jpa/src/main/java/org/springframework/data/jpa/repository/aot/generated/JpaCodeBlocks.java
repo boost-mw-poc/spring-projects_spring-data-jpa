@@ -24,6 +24,8 @@ import java.util.Optional;
 import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
+import org.springframework.core.DefaultParameterNameDiscoverer;
+import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.jpa.repository.QueryHints;
@@ -223,6 +225,10 @@ class JpaCodeBlocks {
 				builder.add("\n");
 			}
 
+			if (query.hasExpression()) {
+				builder.addStatement("class ExpressionMarker{}");
+			}
+
 			for (ParameterBinding binding : query.getParameterBindings()) {
 
 				Object prepare = binding.prepare("s");
@@ -264,6 +270,24 @@ class JpaCodeBlocks {
 				if (mia.identifier().hasName()) {
 					return mia.identifier().getName();
 				}
+			}
+
+			if (origin.isExpression() && origin instanceof ParameterBinding.Expression expr) {
+
+				Builder builder = CodeBlock.builder();
+				ParameterNameDiscoverer discoverer = new DefaultParameterNameDiscoverer();
+				String[] parameterNames = discoverer.getParameterNames(context.getMethod());
+
+				String expressionString = expr.expression().getExpressionString();
+				// re-wrap expression
+				if (!expressionString.startsWith("$")) {
+					expressionString = "#{" + expressionString + "}";
+				}
+
+				builder.add("evaluateExpression(ExpressionMarker.class.getEnclosingMethod(), $S, $L)", expressionString,
+						StringUtils.arrayToCommaDelimitedString(parameterNames));
+
+				return builder.build();
 			}
 
 			throw new UnsupportedOperationException("Not supported yet");

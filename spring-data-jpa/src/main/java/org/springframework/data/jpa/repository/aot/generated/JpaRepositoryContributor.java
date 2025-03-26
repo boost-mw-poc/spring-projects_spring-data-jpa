@@ -18,7 +18,7 @@ package org.springframework.data.jpa.repository.aot.generated;
 import jakarta.persistence.EntityManager;
 
 import java.util.function.Function;
-import java.util.regex.Pattern;
+import java.util.function.UnaryOperator;
 
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.MergedAnnotation;
@@ -98,14 +98,6 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			return null;
 		}
 
-		Query queryAnnotation = AnnotatedElementUtils.findMergedAnnotation(generationContext.getMethod(), Query.class);
-		if (queryAnnotation != null) {
-			if (StringUtils.hasText(queryAnnotation.value())
-					&& Pattern.compile("[\\?:][#$]\\{.*\\}").matcher(queryAnnotation.value()).find()) {
-				return null;
-			}
-		}
-
 		// no KeysetScrolling for now.
 		if (generationContext.getParameterNameOf(ScrollPosition.class) != null
 				|| generationContext.getParameterNameOf(KeysetScrollPosition.class) != null) {
@@ -126,7 +118,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			AotQueries aotQueries;
 			if (query.isPresent() && StringUtils.hasText(query.getString("value"))) {
-				aotQueries = buildStringQuery(selector, query);
+				aotQueries = buildStringQuery(context.getRepositoryInformation().getDomainType(), selector, query);
 			} else {
 				aotQueries = buildPartTreeQuery(context, query);
 			}
@@ -136,10 +128,13 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 		});
 	}
 
-	private AotQueries buildStringQuery(QueryEnhancerSelector selector, MergedAnnotation<Query> query) {
+	private AotQueries buildStringQuery(Class<?> domainType, QueryEnhancerSelector selector,
+			MergedAnnotation<Query> query) {
 
+		UnaryOperator<String> operator = s -> s.replaceAll("#\\{#entityName}", domainType.getName());
 		Function<String, StringAotQuery> queryFunction = query.getBoolean("nativeQuery") ? StringAotQuery::nativeQuery
 				: StringAotQuery::jpqlQuery;
+		queryFunction = operator.andThen(queryFunction);
 
 		StringAotQuery aotStringQuery = queryFunction.apply(query.getString("value"));
 		String countQuery = query.getString("countQuery");

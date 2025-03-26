@@ -304,6 +304,33 @@ class JpaRepositoryContributorIntegrationTests {
 	}
 
 	@Test
+	void shouldResolveTemplatedQuery() {
+
+		User user = fragment.findTemplatedByEmailAddress("han@smuggler.net");
+
+		assertThat(user).isNotNull();
+		assertThat(user.getFirstname()).isEqualTo("Han");
+	}
+
+	@Test
+	void shouldEvaluateExpressionByName() {
+
+		User user = fragment.findValueExpressionNamedByEmailAddress("han@smuggler.net");
+
+		assertThat(user).isNotNull();
+		assertThat(user.getFirstname()).isEqualTo("Han");
+	}
+
+	@Test
+	void shouldEvaluateExpressionByPosition() {
+
+		User user = fragment.findValueExpressionPositionalByEmailAddress("han@smuggler.net");
+
+		assertThat(user).isNotNull();
+		assertThat(user.getFirstname()).isEqualTo("Han");
+	}
+
+	@Test
 	void testDerivedFinderReturningListOfProjections() {
 
 		List<UserDtoProjection> users = fragment.findUserProjectionByLastnameStartingWith("S");
@@ -363,7 +390,6 @@ class JpaRepositoryContributorIntegrationTests {
 
 	void todo() {
 
-		// expressions, templated query with #{#entityName}
 		// synthetic parameters (keyset scrolling! yuck!)
 		// interface projections
 		// named queries

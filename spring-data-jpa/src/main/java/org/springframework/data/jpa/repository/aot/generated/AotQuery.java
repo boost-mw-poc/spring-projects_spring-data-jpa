@@ -58,4 +58,17 @@ abstract class AotQuery {
 		return getLimit().isLimited();
 	}
 
+	/**
+	 * @return {@literal true} if the query uses value expressions.
+	 */
+	public boolean hasExpression() {
+
+		for (ParameterBinding parameterBinding : parameterBindings) {
+			if (parameterBinding.getOrigin().isExpression()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
 }

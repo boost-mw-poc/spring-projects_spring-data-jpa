@@ -97,6 +97,10 @@ class AotMetamodel implements Metamodel {
 	}
 
 	// TODO: Capture an existing factory bean (e.g. EntityManagerFactoryInfo) to extract PersistenceInfo
+	public EntityManagerFactory getEntityManagerFactory() {
+		return entityManagerFactory.get();
+	}
+
 	EntityManagerFactory init() {
 
 		MutablePersistenceUnitInfo persistenceUnitInfo = new MutablePersistenceUnitInfo() {
@@ -123,4 +127,5 @@ class AotMetamodel implements Metamodel {
 			}
 		}, Map.of("hibernate.dialect", "org.hibernate.dialect.H2Dialect")).build();
 	}
+
 }

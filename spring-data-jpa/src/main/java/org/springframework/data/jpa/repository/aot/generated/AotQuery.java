@@ -71,4 +71,5 @@ abstract class AotQuery {
 
 		return false;
 	}
+
 }

@@ -161,6 +161,19 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	List<User> findByLastnameOrderByFirstname(String lastname);
 
+	/**
+	 * Retrieve users by their email address. The finder {@literal User.findByEmailAddress} is declared as annotation at
+	 * {@code User}.
+	 */
 	User findByEmailAddress(String emailAddress);
+
+	@Query(name = "User.findByEmailAddress")
+	Page<User> findPagedByEmailAddress(Pageable pageable, String emailAddress);
+
+	@Query(name = "User.findByEmailAddress", countQuery = "SELECT CoUnT(u) FROM User u WHERE u.emailAddress = ?1")
+	Page<User> findPagedWithCountByEmailAddress(Pageable pageable, String emailAddress);
+
+	@Query(name = "User.findByEmailAddress", countName = "User.findByEmailAddress.count-provided")
+	Page<User> findPagedWithNamedCountByEmailAddress(Pageable pageable, String emailAddress);
 
 }

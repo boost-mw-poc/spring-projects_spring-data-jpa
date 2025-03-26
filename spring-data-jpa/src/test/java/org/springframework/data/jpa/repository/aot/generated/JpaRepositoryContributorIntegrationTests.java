@@ -85,10 +85,44 @@ class JpaRepositoryContributorIntegrationTests {
 	}
 
 	@Test
-	void testFindDerivedFinderSingleEntity() {
+	void testFindDerivedQuerySingleEntity() {
+
+		User user = fragment.findOneByEmailAddress("luke@jedi.org");
+		assertThat(user.getLastname()).isEqualTo("Skywalker");
+	}
+
+	@Test
+	void shouldUseNamedQuery() {
 
 		User user = fragment.findByEmailAddress("luke@jedi.org");
 		assertThat(user.getLastname()).isEqualTo("Skywalker");
+	}
+
+	@Test
+	void shouldUseNamedQueryAndDeriveCountQuery() {
+
+		Page<User> user = fragment.findPagedByEmailAddress(PageRequest.of(0, 1), "luke@jedi.org");
+
+		assertThat(user).hasSize(1);
+		assertThat(user.getTotalElements()).isEqualTo(1);
+	}
+
+	@Test
+	void shouldUseNamedQueryAndProvidedCountQuery() {
+
+		Page<User> user = fragment.findPagedWithCountByEmailAddress(PageRequest.of(0, 1), "luke@jedi.org");
+
+		assertThat(user).hasSize(1);
+		assertThat(user.getTotalElements()).isEqualTo(1);
+	}
+
+	@Test
+	void shouldUseNamedQueryAndNamedCountQuery() {
+
+		Page<User> user = fragment.findPagedWithNamedCountByEmailAddress(PageRequest.of(0, 1), "luke@jedi.org");
+
+		assertThat(user).hasSize(1);
+		assertThat(user.getTotalElements()).isEqualTo(1);
 	}
 
 	@Test
@@ -401,7 +435,6 @@ class JpaRepositoryContributorIntegrationTests {
 
 		// synthetic parameters (keyset scrolling! yuck!)
 		// interface projections
-		// named queries
 		// dynamic projections
 		// class type parameter
 

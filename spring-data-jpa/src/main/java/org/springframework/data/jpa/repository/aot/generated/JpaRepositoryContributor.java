@@ -60,18 +60,24 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 /**
+ * JPA-specific {@link RepositoryContributor} contributing an AOT repository fragment using the {@link EntityManager}
+ * directly to run queries.
+ * <p>
+ * The underlying {@link jakarta.persistence.metamodel.Metamodel} requires Hibernate to build metamodel information.
+ *
  * @author Christoph Strobl
  * @author Mark Paluch
+ * @since 4.0
  */
 public class JpaRepositoryContributor extends RepositoryContributor {
 
 	private final CollectionAwareProjectionFactory projectionFactory = new CollectionAwareProjectionFactory();
-	private final AotMetaModel metaModel;
+	private final AotMM metaModel;
 
 	public JpaRepositoryContributor(AotRepositoryContext repositoryContext) {
 		super(repositoryContext);
 
-		this.metaModel = new AotMetaModel(repositoryContext.getResolvedTypes());
+		this.metaModel = new AotMM(repositoryContext.getResolvedTypes());
 	}
 
 	@Override

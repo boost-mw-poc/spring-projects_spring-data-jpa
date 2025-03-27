@@ -134,10 +134,8 @@ class JpaCodeBlocks {
 		 */
 		public CodeBlock build() {
 
-			boolean isProjecting = context.getActualReturnType() != null
-					&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
-							context.getActualReturnType());
-			Object actualReturnType = isProjecting ? context.getActualReturnType()
+			boolean isProjecting = context.getReturnedType().isProjecting();
+			Class<?> actualReturnType = isProjecting ? context.getActualReturnType().toClass()
 					: context.getRepositoryInformation().getDomainType();
 
 			CodeBlock.Builder builder = CodeBlock.builder();
@@ -199,7 +197,7 @@ class JpaCodeBlocks {
 			return builder.build();
 		}
 
-		private CodeBlock applySorting(String sort, String queryString, Object actualReturnType) {
+		private CodeBlock applySorting(String sort, String queryString, Class<?> actualReturnType) {
 
 			Builder builder = CodeBlock.builder();
 			builder.beginControlFlow("if ($L.isSorted())", sort);
@@ -443,7 +441,7 @@ class JpaCodeBlocks {
 			boolean isProjecting = context.getActualReturnType() != null
 					&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
 							context.getActualReturnType());
-			Object actualReturnType = isProjecting ? context.getActualReturnType()
+			Object actualReturnType = isProjecting ? context.getActualReturnType().toClass()
 					: context.getRepositoryInformation().getDomainType();
 			builder.add("\n");
 
@@ -498,7 +496,8 @@ class JpaCodeBlocks {
 						builder.addStatement("return $T.ofNullable(($T) $L.getSingleResultOrNull())", Optional.class,
 								actualReturnType, queryVariableName);
 					} else {
-						builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType(), queryVariableName);
+						builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType().toClass(),
+								queryVariableName);
 					}
 				} else if (context.returnsPage()) {
 					builder.addStatement("return $T.getPage(($T<$T>) $L.getResultList(), $L, countAll)",
@@ -513,7 +512,7 @@ class JpaCodeBlocks {
 							"return new $T<>(hasNext ? resultList.subList(0, $L.getPageSize()) : resultList, $L, hasNext)",
 							SliceImpl.class, context.getPageableParameterName(), context.getPageableParameterName());
 				} else {
-					builder.addStatement("return ($T) query.getResultList()", context.getReturnType());
+					builder.addStatement("return ($T) query.getResultList()", context.getReturnType().toClass());
 				}
 			}
 

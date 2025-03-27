@@ -29,12 +29,8 @@ import java.util.function.UnaryOperator;
 
 import org.jspecify.annotations.Nullable;
 
-import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.core.annotation.MergedAnnotations;
-import org.springframework.data.domain.KeysetScrollPosition;
-import org.springframework.data.domain.ScrollPosition;
-import org.springframework.data.jpa.projection.CollectionAwareProjectionFactory;
 import org.springframework.data.jpa.provider.PersistenceProvider;
 import org.springframework.data.jpa.provider.QueryExtractor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -49,25 +45,25 @@ import org.springframework.data.jpa.repository.query.JpaParameters;
 import org.springframework.data.jpa.repository.query.JpaQueryCreator;
 import org.springframework.data.jpa.repository.query.JpaQueryMethod;
 import org.springframework.data.jpa.repository.query.ParameterMetadataProvider;
-import org.springframework.data.jpa.repository.query.Procedure;
 import org.springframework.data.jpa.repository.query.QueryEnhancerSelector;
 import org.springframework.data.jpa.repository.support.JpqlQueryTemplates;
 import org.springframework.data.repository.aot.generate.AotRepositoryConstructorBuilder;
-import org.springframework.data.repository.aot.generate.AotRepositoryImplementationMetadata;
-import org.springframework.data.repository.aot.generate.AotRepositoryMethodBuilder;
+import org.springframework.data.repository.aot.generate.AotRepositoryFragmentMetadata;
 import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
+import org.springframework.data.repository.aot.generate.MethodContributor;
 import org.springframework.data.repository.aot.generate.RepositoryContributor;
 import org.springframework.data.repository.config.AotRepositoryContext;
 import org.springframework.data.repository.core.RepositoryInformation;
 import org.springframework.data.repository.core.support.RepositoryFactoryBeanSupport;
 import org.springframework.data.repository.query.ParametersSource;
+import org.springframework.data.repository.query.QueryMethod;
 import org.springframework.data.repository.query.ReturnedType;
 import org.springframework.data.repository.query.parser.PartTree;
+import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.TypeName;
 import org.springframework.javapoet.TypeSpec;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
-import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -82,17 +78,17 @@ import org.springframework.util.StringUtils;
  */
 public class JpaRepositoryContributor extends RepositoryContributor {
 
-	private final CollectionAwareProjectionFactory projectionFactory = new CollectionAwareProjectionFactory();
 	private final AotMetamodel metaModel;
+	private final PersistenceProvider persistenceProvider;
 
 	public JpaRepositoryContributor(AotRepositoryContext repositoryContext) {
 		super(repositoryContext);
-
 		this.metaModel = new AotMetamodel(repositoryContext.getResolvedTypes());
+		this.persistenceProvider = PersistenceProvider.fromEntityManagerFactory(metaModel.getEntityManagerFactory());
 	}
 
 	@Override
-	protected void customizeFile(RepositoryInformation information, AotRepositoryImplementationMetadata metadata,
+	protected void customizeClass(RepositoryInformation information, AotRepositoryFragmentMetadata metadata,
 			TypeSpec.Builder builder) {
 		builder.superclass(TypeName.get(AotRepositoryFragmentSupport.class));
 	}
@@ -110,36 +106,37 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 	}
 
 	@Override
-	protected AotRepositoryMethodBuilder contributeRepositoryMethod(
-			AotRepositoryMethodGenerationContext generationContext) {
+	protected @Nullable MethodContributor<? extends QueryMethod> contributeQueryMethod(Method method,
+			RepositoryInformation repositoryInformation) {
 
+		JpaQueryMethod queryMethod = new JpaQueryMethod(method, repositoryInformation, getProjectionFactory(),
+				persistenceProvider);
+
+		// meh!
 		QueryEnhancerSelector selector = QueryEnhancerSelector.DEFAULT_SELECTOR;
 
 		// no stored procedures for now.
-		if (AnnotatedElementUtils.findMergedAnnotation(generationContext.getMethod(), Procedure.class) != null) {
+		if (queryMethod.isProcedureQuery()) {
 			return null;
 		}
 
 		// no KeysetScrolling for now.
-		if (generationContext.getParameterNameOf(ScrollPosition.class) != null
-				|| generationContext.getParameterNameOf(KeysetScrollPosition.class) != null) {
+		if (queryMethod.getParameters().hasScrollPositionParameter()) {
 			return null;
 		}
 
-		if (AnnotatedElementUtils.findMergedAnnotation(generationContext.getMethod(), Modifying.class) != null) {
+		if (queryMethod.isModifyingQuery()) {
 
-			Class<?> returnType = generationContext.getMethod().getReturnType();
+			Class<?> returnType = method.getReturnType();
 			if (!ClassUtils.isVoidType(returnType)
 					&& !JpaCodeBlocks.QueryExecutionBlockBuilder.returnsModifying(returnType)) {
 				return null;
 			}
 		}
 
-		return new AotRepositoryMethodBuilder(generationContext).customize((context, body) -> {
+		return MethodContributor.forQueryMethod(queryMethod).contribute(context -> {
 
-			PersistenceProvider provider = PersistenceProvider.fromEntityManagerFactory(metaModel.getEntityManagerFactory());
-			JpaQueryMethod queryMethod = new JpaQueryMethod(context.getMethod(), context.getRepositoryInformation(),
-					projectionFactory, provider);
+			CodeBlock.Builder body = CodeBlock.builder();
 
 			MergedAnnotations annotations = MergedAnnotations.from(context.getMethod());
 
@@ -147,18 +144,19 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			MergedAnnotation<NativeQuery> nativeQuery = annotations.get(NativeQuery.class);
 			MergedAnnotation<QueryHints> queryHints = annotations.get(QueryHints.class);
 			MergedAnnotation<Modifying> modifying = annotations.get(Modifying.class);
-			ReturnedType returnedType = getReturnedType(context);
+			ReturnedType returnedType = context.getReturnedType();
 
-			body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
+			body.add(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
 			AotQueries aotQueries = getQueries(context, query, selector, queryMethod, returnedType);
 
-
-			body.addCode(JpaCodeBlocks.queryBuilder(context, queryMethod.getParameters()).filter(aotQueries)
+			body.add(JpaCodeBlocks.queryBuilder(context, queryMethod.getParameters()).filter(aotQueries)
 					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).query(query)
 					.nativeQuery(nativeQuery).queryHints(queryHints).build());
 
-			body.addCode(JpaCodeBlocks.executionBuilder(context).modifying(modifying).build());
+			body.add(JpaCodeBlocks.executionBuilder(context).modifying(modifying).build());
+
+			return body.build();
 		});
 	}
 
@@ -176,24 +174,6 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 		}
 
 		return buildPartTreeQuery(returnedType, context, query, queryMethod);
-	}
-
-	private ReturnedType getReturnedType(AotRepositoryMethodGenerationContext context) {
-
-		boolean isProjecting = context.getActualReturnType() != null
-				&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
-						context.getActualReturnType());
-
-		Class<?> actualReturnType;
-		try {
-			actualReturnType = isProjecting
-					? ClassUtils.forName(context.getActualReturnType().toString(), context.getClass().getClassLoader())
-					: context.getRepositoryInformation().getDomainType();
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		}
-
-		return ReturnedType.of(actualReturnType, context.getRepositoryInformation().getDomainType(), projectionFactory);
 	}
 
 	private AotQueries buildStringQuery(Class<?> domainType, ReturnedType returnedType, QueryEnhancerSelector selector,

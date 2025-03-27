@@ -37,6 +37,7 @@ import org.springframework.data.domain.ScrollPosition;
 import org.springframework.data.jpa.projection.CollectionAwareProjectionFactory;
 import org.springframework.data.jpa.provider.PersistenceProvider;
 import org.springframework.data.jpa.provider.QueryExtractor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
@@ -125,6 +126,15 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			return null;
 		}
 
+		if (AnnotatedElementUtils.findMergedAnnotation(generationContext.getMethod(), Modifying.class) != null) {
+
+			Class<?> returnType = generationContext.getMethod().getReturnType();
+			if (!ClassUtils.isVoidType(returnType)
+					&& !JpaCodeBlocks.QueryExecutionBlockBuilder.returnsModifying(returnType)) {
+				return null;
+			}
+		}
+
 		return new AotRepositoryMethodBuilder(generationContext).customize((context, body) -> {
 
 			PersistenceProvider provider = PersistenceProvider.fromEntityManagerFactory(metaModel.getEntityManagerFactory());
@@ -136,17 +146,19 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			MergedAnnotation<Query> query = annotations.get(Query.class);
 			MergedAnnotation<NativeQuery> nativeQuery = annotations.get(NativeQuery.class);
 			MergedAnnotation<QueryHints> queryHints = annotations.get(QueryHints.class);
+			MergedAnnotation<Modifying> modifying = annotations.get(Modifying.class);
 			ReturnedType returnedType = getReturnedType(context);
 
 			body.addCode(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
 			AotQueries aotQueries = getQueries(context, query, selector, queryMethod, returnedType);
 
+
 			body.addCode(JpaCodeBlocks.queryBuilder(context, queryMethod.getParameters()).filter(aotQueries)
 					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).query(query)
 					.nativeQuery(nativeQuery).queryHints(queryHints).build());
 
-			body.addCode(JpaCodeBlocks.executionBuilder(context).build());
+			body.addCode(JpaCodeBlocks.executionBuilder(context).modifying(modifying).build());
 		});
 	}
 

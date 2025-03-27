@@ -30,6 +30,7 @@ import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.jpa.repository.query.DeclaredQuery;
@@ -417,6 +418,7 @@ class JpaCodeBlocks {
 
 		private final AotRepositoryMethodGenerationContext context;
 		private String queryVariableName = "query";
+		private MergedAnnotation<Modifying> modifying = MergedAnnotation.missing();
 
 		private QueryExecutionBlockBuilder(AotRepositoryMethodGenerationContext context) {
 			this.context = context;
@@ -425,6 +427,12 @@ class JpaCodeBlocks {
 		public QueryExecutionBlockBuilder referencing(String queryVariableName) {
 
 			this.queryVariableName = queryVariableName;
+			return this;
+		}
+
+		public QueryExecutionBlockBuilder modifying(MergedAnnotation<Modifying> modifying) {
+
+			this.modifying = modifying;
 			return this;
 		}
 
@@ -438,6 +446,35 @@ class JpaCodeBlocks {
 			Object actualReturnType = isProjecting ? context.getActualReturnType()
 					: context.getRepositoryInformation().getDomainType();
 			builder.add("\n");
+
+			if (modifying.isPresent()) {
+
+				if (modifying.getBoolean("flushAutomatically")) {
+					builder.addStatement("this.$L.flush()", context.fieldNameOf(EntityManager.class));
+				}
+
+				Class<?> returnType = context.getMethod().getReturnType();
+
+				if (returnsModifying(returnType)) {
+					builder.addStatement("int result = $L.executeUpdate()", queryVariableName);
+				} else {
+					builder.addStatement("$L.executeUpdate()", queryVariableName);
+				}
+
+				if (modifying.getBoolean("clearAutomatically")) {
+					builder.addStatement("this.$L.clear()", context.fieldNameOf(EntityManager.class));
+				}
+
+				if (returnType == int.class || returnType == long.class || returnType == Integer.class) {
+					builder.addStatement("return result");
+				}
+
+				if (returnType == Long.class) {
+					builder.addStatement("return (long) result");
+				}
+
+				return builder.build();
+			}
 
 			if (context.isDeleteMethod()) {
 
@@ -482,6 +519,12 @@ class JpaCodeBlocks {
 
 			return builder.build();
 
+		}
+
+		public static boolean returnsModifying(Class<?> returnType) {
+
+			return returnType == int.class || returnType == long.class || returnType == Integer.class
+					|| returnType == Long.class;
 		}
 
 	}

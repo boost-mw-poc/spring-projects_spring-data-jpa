@@ -176,4 +176,8 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	@Query(name = "User.findByEmailAddress", countName = "User.findByEmailAddress.count-provided")
 	Page<User> findPagedWithNamedCountByEmailAddress(Pageable pageable, String emailAddress);
 
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update User u set u.lastname = ?1")
+	int renameAllUsersTo(String lastname);
+
 }

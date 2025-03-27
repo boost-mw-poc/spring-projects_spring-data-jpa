@@ -409,6 +409,19 @@ class JpaRepositoryContributorIntegrationTests {
 		assertThat(yodaShouldBeGone).isNull();
 	}
 
+	@Test
+	void shouldApplyModifying() {
+
+		int affected = fragment.renameAllUsersTo("Jones");
+
+		assertThat(affected).isEqualTo(7);
+
+		Object yodaShouldBeGone = em
+				.createQuery("SELECT u FROM %s u WHERE u.lastname = 'n/a'".formatted(User.class.getName()))
+				.getSingleResultOrNull();
+		assertThat(yodaShouldBeGone).isNull();
+	}
+
 	// native queries
 
 	@Test
@@ -439,9 +452,6 @@ class JpaRepositoryContributorIntegrationTests {
 		// class type parameter
 
 		// entity graphs
-		// delete
-		// @Modifying
-		// flush / clear
 	}
 
 }

@@ -446,6 +446,7 @@ class JpaRepositoryContributorIntegrationTests {
 
 	void todo() {
 
+		// Stream method
 		// synthetic parameters (keyset scrolling! yuck!)
 		// interface projections
 		// dynamic projections

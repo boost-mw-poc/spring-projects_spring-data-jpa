@@ -57,8 +57,9 @@ abstract class StringAotQuery extends AotQuery {
 	/**
 	 * Creates a JPQL {@code StringAotQuery} using the given bindings and limit.
 	 */
-	public static StringAotQuery jpqlQuery(String queryString, List<ParameterBinding> bindings, Limit resultLimit) {
-		return new LimitedAotQuery(queryString, bindings, resultLimit);
+	public static StringAotQuery jpqlQuery(String queryString, List<ParameterBinding> bindings, Limit resultLimit,
+			boolean delete, boolean exists) {
+		return new LimitedAotQuery(queryString, bindings, resultLimit, delete, exists);
 	}
 
 	/**
@@ -90,7 +91,6 @@ abstract class StringAotQuery extends AotQuery {
 	public String toString() {
 		return getQueryString();
 	}
-
 
 	/**
 	 * @author Christoph Strobl
@@ -143,11 +143,16 @@ abstract class StringAotQuery extends AotQuery {
 
 		private final String queryString;
 		private final Limit limit;
+		private final boolean delete;
+		private final boolean exists;
 
-		LimitedAotQuery(String queryString, List<ParameterBinding> parameterBindings, Limit limit) {
+		LimitedAotQuery(String queryString, List<ParameterBinding> parameterBindings, Limit limit, boolean delete,
+				boolean exists) {
 			super(parameterBindings);
 			this.queryString = queryString;
 			this.limit = limit;
+			this.delete = delete;
+			this.exists = exists;
 		}
 
 		@Override
@@ -168,6 +173,16 @@ abstract class StringAotQuery extends AotQuery {
 		@Override
 		public Limit getLimit() {
 			return limit;
+		}
+
+		@Override
+		public boolean isDelete() {
+			return delete;
+		}
+
+		@Override
+		public boolean isExists() {
+			return exists;
 		}
 
 		@Override

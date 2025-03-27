@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 the original author or authors.
+ * Copyright 2024-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 
 import org.springframework.core.annotation.MergedAnnotation;
-import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.data.jpa.provider.PersistenceProvider;
 import org.springframework.data.jpa.provider.QueryExtractor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -47,15 +46,14 @@ import org.springframework.data.jpa.repository.query.JpaQueryMethod;
 import org.springframework.data.jpa.repository.query.ParameterMetadataProvider;
 import org.springframework.data.jpa.repository.query.QueryEnhancerSelector;
 import org.springframework.data.jpa.repository.support.JpqlQueryTemplates;
+import org.springframework.data.repository.aot.generate.AotQueryMethodGenerationContext;
 import org.springframework.data.repository.aot.generate.AotRepositoryConstructorBuilder;
 import org.springframework.data.repository.aot.generate.AotRepositoryFragmentMetadata;
-import org.springframework.data.repository.aot.generate.AotRepositoryMethodGenerationContext;
 import org.springframework.data.repository.aot.generate.MethodContributor;
 import org.springframework.data.repository.aot.generate.RepositoryContributor;
 import org.springframework.data.repository.config.AotRepositoryContext;
 import org.springframework.data.repository.core.RepositoryInformation;
 import org.springframework.data.repository.core.support.RepositoryFactoryBeanSupport;
-import org.springframework.data.repository.query.ParametersSource;
 import org.springframework.data.repository.query.QueryMethod;
 import org.springframework.data.repository.query.ReturnedType;
 import org.springframework.data.repository.query.parser.PartTree;
@@ -127,7 +125,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 		if (queryMethod.isModifyingQuery()) {
 
-			Class<?> returnType = method.getReturnType();
+			Class<?> returnType = repositoryInformation.getReturnType(method).getType();
 			if (!ClassUtils.isVoidType(returnType)
 					&& !JpaCodeBlocks.QueryExecutionBlockBuilder.returnsModifying(returnType)) {
 				return null;
@@ -138,29 +136,28 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			CodeBlock.Builder body = CodeBlock.builder();
 
-			MergedAnnotations annotations = MergedAnnotations.from(context.getMethod());
-
-			MergedAnnotation<Query> query = annotations.get(Query.class);
-			MergedAnnotation<NativeQuery> nativeQuery = annotations.get(NativeQuery.class);
-			MergedAnnotation<QueryHints> queryHints = annotations.get(QueryHints.class);
-			MergedAnnotation<Modifying> modifying = annotations.get(Modifying.class);
+			MergedAnnotation<Query> query = context.getAnnotation(Query.class);
+			MergedAnnotation<NativeQuery> nativeQuery = context.getAnnotation(NativeQuery.class);
+			MergedAnnotation<QueryHints> queryHints = context.getAnnotation(QueryHints.class);
+			MergedAnnotation<Modifying> modifying = context.getAnnotation(Modifying.class);
 			ReturnedType returnedType = context.getReturnedType();
 
 			body.add(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
 			AotQueries aotQueries = getQueries(context, query, selector, queryMethod, returnedType);
 
-			body.add(JpaCodeBlocks.queryBuilder(context, queryMethod.getParameters()).filter(aotQueries)
+			body.add(JpaCodeBlocks.queryBuilder(context, queryMethod).filter(aotQueries)
 					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).query(query)
 					.nativeQuery(nativeQuery).queryHints(queryHints).build());
 
-			body.add(JpaCodeBlocks.executionBuilder(context).modifying(modifying).build());
+			body.add(
+					JpaCodeBlocks.executionBuilder(context, queryMethod).modifying(modifying).query(aotQueries.result()).build());
 
 			return body.build();
 		});
 	}
 
-	private AotQueries getQueries(AotRepositoryMethodGenerationContext context, MergedAnnotation<Query> query,
+	private AotQueries getQueries(AotQueryMethodGenerationContext context, MergedAnnotation<Query> query,
 			QueryEnhancerSelector selector, JpaQueryMethod queryMethod, ReturnedType returnedType) {
 
 		if (query.isPresent() && StringUtils.hasText(query.getString("value"))) {
@@ -269,17 +266,14 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 		return null;
 	}
 
-	private AotQueries buildPartTreeQuery(ReturnedType returnedType, AotRepositoryMethodGenerationContext context,
+	private AotQueries buildPartTreeQuery(ReturnedType returnedType, AotQueryMethodGenerationContext context,
 			MergedAnnotation<Query> query, JpaQueryMethod queryMethod) {
 
 		PartTree partTree = new PartTree(context.getMethod().getName(), context.getRepositoryInformation().getDomainType());
 		// TODO make configurable
 		JpqlQueryTemplates templates = JpqlQueryTemplates.UPPER;
 
-		ParametersSource parametersSource = ParametersSource.of(context.getRepositoryInformation(), context.getMethod());
-		JpaParameters parameters = new JpaParameters(parametersSource);
-
-		AotQuery aotQuery = createQuery(partTree, returnedType, parameters, templates);
+		AotQuery aotQuery = createQuery(partTree, returnedType, queryMethod.getParameters(), templates);
 
 		if (query.isPresent() && StringUtils.hasText(query.getString("countQuery"))) {
 			return AotQueries.from(aotQuery, StringAotQuery.jpqlQuery(query.getString("countQuery")));
@@ -290,7 +284,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			return AotQueries.from(aotQuery, buildNamedAotQuery(namedCountQuery, queryMethod, false));
 		}
 
-		AotQuery partTreeCountQuery = createCountQuery(partTree, returnedType, parameters, templates);
+		AotQuery partTreeCountQuery = createCountQuery(partTree, returnedType, queryMethod.getParameters(), templates);
 		return AotQueries.from(aotQuery, partTreeCountQuery);
 	}
 
@@ -302,7 +296,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 		JpaQueryCreator queryCreator = new JpaQueryCreator(partTree, returnedType, metadataProvider, templates, metaModel);
 
 		return StringAotQuery.jpqlQuery(queryCreator.createQuery(), metadataProvider.getBindings(),
-				partTree.getResultLimit());
+				partTree.getResultLimit(), partTree.isDelete(), partTree.isExistsProjection());
 	}
 
 	private AotQuery createCountQuery(PartTree partTree, ReturnedType returnedType, JpaParameters parameters,
@@ -313,11 +307,11 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 		JpaQueryCreator queryCreator = new JpaCountQueryCreator(partTree, returnedType, metadataProvider, templates,
 				metaModel);
 
-		return StringAotQuery.jpqlQuery(queryCreator.createQuery(), metadataProvider.getBindings(), null);
+		return StringAotQuery.jpqlQuery(queryCreator.createQuery(), metadataProvider.getBindings(), null, false, false);
 	}
 
 	private static @Nullable Class<?> getQueryReturnType(AotQuery query, ReturnedType returnedType,
-			AotRepositoryMethodGenerationContext context) {
+			AotQueryMethodGenerationContext context) {
 
 		Method method = context.getMethod();
 		RepositoryInformation repositoryInformation = context.getRepositoryInformation();

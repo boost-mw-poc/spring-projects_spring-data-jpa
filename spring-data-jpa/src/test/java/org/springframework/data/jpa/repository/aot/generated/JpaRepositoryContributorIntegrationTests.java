@@ -456,11 +456,11 @@ class JpaRepositoryContributorIntegrationTests {
 
 	void todo() {
 
+		// entity graphs
 		// interface projections
 		// dynamic projections
 		// class type parameter
 
-		// entity graphs
 		// synthetic parameters (keyset scrolling! yuck!)
 	}
 

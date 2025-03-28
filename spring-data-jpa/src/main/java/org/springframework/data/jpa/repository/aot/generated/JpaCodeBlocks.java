@@ -157,9 +157,6 @@ class JpaCodeBlocks {
 				builder.addStatement("$T $L = $S", String.class, countQueryStringNameVariableName, sq.getQueryString());
 			}
 
-			// sorting
-			// TODO: refactor into sort builder
-
 			String sortParameterName = context.getSortParameterName();
 			if (sortParameterName == null && context.getPageableParameterName() != null) {
 				sortParameterName = "%s.getSort()".formatted(context.getPageableParameterName());

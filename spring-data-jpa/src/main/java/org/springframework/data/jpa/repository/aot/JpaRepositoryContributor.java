@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2025 the original author or authors.
+ * Copyright 2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.data.jpa.repository.aot.generated;
+package org.springframework.data.jpa.repository.aot;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -147,8 +147,8 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			AotQueries aotQueries = getQueries(context, query, selector, queryMethod, returnedType);
 
 			body.add(JpaCodeBlocks.queryBuilder(context, queryMethod).filter(aotQueries)
-					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).query(query)
-					.nativeQuery(nativeQuery).queryHints(queryHints).build());
+					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).nativeQuery(nativeQuery)
+					.build());
 
 			body.add(
 					JpaCodeBlocks.executionBuilder(context, queryMethod).modifying(modifying).query(aotQueries.result()).build());

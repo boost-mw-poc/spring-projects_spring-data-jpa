@@ -19,6 +19,7 @@ import jakarta.persistence.QueryHint;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
@@ -34,8 +35,10 @@ import org.springframework.data.repository.CrudRepository;
 
 /**
  * @author Christoph Strobl
+ * @author Mark Paluch
  */
-public interface UserRepository extends CrudRepository<User, Integer> {
+// TODO: Querydsl, query by example
+interface UserRepository extends CrudRepository<User, Integer> {
 
 	List<User> findUserNoArgumentsBy();
 
@@ -64,6 +67,8 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 	Page<User> findPageOfUsersByLastnameStartingWith(String lastname, Pageable page);
 
 	Slice<User> findSliceOfUserByLastnameStartingWith(String lastname, Pageable page);
+
+	Stream<User> streamByLastnameLike(String lastname);
 
 	/* Annotated Queries */
 
@@ -105,6 +110,7 @@ public interface UserRepository extends CrudRepository<User, Integer> {
 
 	@Query("select u from User u where u.lastname like ?1%")
 	Slice<User> findAnnotatedQuerySliceOfUsersByLastname(String lastname, Pageable pageable);
+
 
 	// Value Expressions
 

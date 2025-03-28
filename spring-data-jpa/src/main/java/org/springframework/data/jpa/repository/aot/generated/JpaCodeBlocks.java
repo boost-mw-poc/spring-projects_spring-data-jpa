@@ -19,6 +19,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.persistence.QueryHint;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.LongSupplier;
@@ -427,7 +428,7 @@ class JpaCodeBlocks {
 			boolean isProjecting = context.getActualReturnType() != null
 					&& !ObjectUtils.nullSafeEquals(TypeName.get(context.getRepositoryInformation().getDomainType()),
 							context.getActualReturnType());
-			Object actualReturnType = isProjecting ? context.getActualReturnType().toClass()
+			Type actualReturnType = isProjecting ? context.getActualReturnType().getType()
 					: context.getRepositoryInformation().getDomainType();
 			builder.add("\n");
 
@@ -478,7 +479,9 @@ class JpaCodeBlocks {
 			} else {
 
 				if (queryMethod.isCollectionQuery()) {
-					builder.addStatement("return ($T) query.getResultList()", TypeName.get(context.getReturnType().getType()));
+					builder.addStatement("return ($T) query.getResultList()", context.getReturnTypeName());
+				} else if (queryMethod.isStreamQuery()) {
+					builder.addStatement("return ($T) query.getResultStream()", context.getReturnTypeName());
 				} else if (queryMethod.isPageQuery()) {
 					builder.addStatement("return $T.getPage(($T<$T>) $L.getResultList(), $L, countAll)",
 							PageableExecutionUtils.class, List.class, actualReturnType, queryVariableName,
@@ -497,14 +500,13 @@ class JpaCodeBlocks {
 						builder.addStatement("return $T.ofNullable(($T) $L.getSingleResultOrNull())", Optional.class,
 								actualReturnType, queryVariableName);
 					} else {
-						builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnType().toClass(),
+						builder.addStatement("return ($T) $L.getSingleResultOrNull()", context.getReturnTypeName(),
 								queryVariableName);
 					}
 				}
 			}
 
 			return builder.build();
-
 		}
 
 		public static boolean returnsModifying(Class<?> returnType) {

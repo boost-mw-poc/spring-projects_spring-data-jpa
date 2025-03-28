@@ -21,6 +21,7 @@ import jakarta.persistence.EntityManager;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -158,6 +159,14 @@ class JpaRepositoryContributorIntegrationTests {
 	void testDerivedFinderReturningList() {
 
 		List<User> users = fragment.findByLastnameStartingWith("S");
+		assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("luke@jedi.org", "vader@empire.com",
+				"kylo@new-empire.com", "han@smuggler.net");
+	}
+
+	@Test
+	void shouldReturnStream() {
+
+		Stream<User> users = fragment.streamByLastnameLike("S%");
 		assertThat(users).extracting(User::getEmailAddress).containsExactlyInAnyOrder("luke@jedi.org", "vader@empire.com",
 				"kylo@new-empire.com", "han@smuggler.net");
 	}
@@ -390,6 +399,7 @@ class JpaRepositoryContributorIntegrationTests {
 		assertThat(page.getContent()).extracting(UserDtoProjection::getEmailAddress).containsExactly("han@smuggler.net",
 				"kylo@new-empire.com");
 
+		// TODO
 		Page<UserDtoProjection> noResults = fragment.findUserProjectionByLastnameStartingWith("a",
 				PageRequest.of(0, 2, Sort.by("emailAddress")));
 	}
@@ -446,13 +456,12 @@ class JpaRepositoryContributorIntegrationTests {
 
 	void todo() {
 
-		// Stream method
-		// synthetic parameters (keyset scrolling! yuck!)
 		// interface projections
 		// dynamic projections
 		// class type parameter
 
 		// entity graphs
+		// synthetic parameters (keyset scrolling! yuck!)
 	}
 
 }

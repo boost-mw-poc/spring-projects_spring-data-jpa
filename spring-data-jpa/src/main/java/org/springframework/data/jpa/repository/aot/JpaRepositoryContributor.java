@@ -19,6 +19,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQueryReference;
+import jakarta.persistence.metamodel.Metamodel;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -61,7 +62,6 @@ import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.TypeName;
 import org.springframework.javapoet.TypeSpec;
 import org.springframework.util.Assert;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -76,13 +76,23 @@ import org.springframework.util.StringUtils;
  */
 public class JpaRepositoryContributor extends RepositoryContributor {
 
-	private final AotMetamodel metaModel;
+	private final EntityManagerFactory emf;
+	private final Metamodel metaModel;
 	private final PersistenceProvider persistenceProvider;
 
 	public JpaRepositoryContributor(AotRepositoryContext repositoryContext) {
 		super(repositoryContext);
-		this.metaModel = new AotMetamodel(repositoryContext.getResolvedTypes());
-		this.persistenceProvider = PersistenceProvider.fromEntityManagerFactory(metaModel.getEntityManagerFactory());
+		AotMetamodel amm = new AotMetamodel(repositoryContext.getResolvedTypes());
+		this.metaModel = amm;
+		this.emf = amm.getEntityManagerFactory();
+		this.persistenceProvider = PersistenceProvider.fromEntityManagerFactory(amm.getEntityManagerFactory());
+	}
+
+	public JpaRepositoryContributor(AotRepositoryContext repositoryContext, EntityManagerFactory entityManagerFactory) {
+		super(repositoryContext);
+		this.emf = entityManagerFactory;
+		this.metaModel = entityManagerFactory.getMetamodel();
+		this.persistenceProvider = PersistenceProvider.fromEntityManagerFactory(entityManagerFactory);
 	}
 
 	@Override
@@ -118,18 +128,20 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			return null;
 		}
 
-		// no KeysetScrolling for now.
-		if (queryMethod.getParameters().hasScrollPositionParameter()) {
+		ReturnedType returnedType = queryMethod.getResultProcessor().getReturnedType();
+
+		// no interface/dynamic projections for now.
+		if (returnedType.isProjecting() && returnedType.getReturnedType().isInterface()) {
 			return null;
 		}
 
-		if (queryMethod.isModifyingQuery()) {
+		if (queryMethod.getParameters().hasDynamicProjection()) {
+			return null;
+		}
 
-			Class<?> returnType = repositoryInformation.getReturnType(method).getType();
-			if (!ClassUtils.isVoidType(returnType)
-					&& !JpaCodeBlocks.QueryExecutionBlockBuilder.returnsModifying(returnType)) {
-				return null;
-			}
+		// no KeysetScrolling for now.
+		if (queryMethod.getParameters().hasScrollPositionParameter()) {
+			return null;
 		}
 
 		return MethodContributor.forQueryMethod(queryMethod).contribute(context -> {
@@ -140,7 +152,6 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			MergedAnnotation<NativeQuery> nativeQuery = context.getAnnotation(NativeQuery.class);
 			MergedAnnotation<QueryHints> queryHints = context.getAnnotation(QueryHints.class);
 			MergedAnnotation<Modifying> modifying = context.getAnnotation(Modifying.class);
-			ReturnedType returnedType = context.getReturnedType();
 
 			body.add(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
@@ -148,6 +159,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			body.add(JpaCodeBlocks.queryBuilder(context, queryMethod).filter(aotQueries)
 					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).nativeQuery(nativeQuery)
+					.queryHints(queryHints)
 					.build());
 
 			body.add(
@@ -251,8 +263,6 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 		List<Class<?>> candidates = Arrays.asList(Object.class, returnedType.getDomainType(),
 				returnedType.getReturnedType(), returnedType.getTypeToRead(), void.class, null, Long.class, Integer.class,
 				Long.TYPE, Integer.TYPE, Number.class);
-
-		EntityManagerFactory emf = metaModel.getEntityManagerFactory();
 
 		for (Class<?> candidate : candidates) {
 

@@ -106,6 +106,12 @@ class JpaCodeBlocks {
 			return this;
 		}
 
+		public QueryBlockBuilder queryHints(MergedAnnotation<QueryHints> queryHints) {
+
+			this.queryHints = queryHints;
+			return this;
+		}
+
 		public QueryBlockBuilder queryReturnType(@Nullable Class<?> queryReturnType) {
 			this.queryReturnType = queryReturnType;
 			return this;

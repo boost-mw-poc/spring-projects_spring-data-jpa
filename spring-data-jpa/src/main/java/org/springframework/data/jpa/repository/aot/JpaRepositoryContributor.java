@@ -58,10 +58,12 @@ import org.springframework.data.repository.core.support.RepositoryFactoryBeanSup
 import org.springframework.data.repository.query.QueryMethod;
 import org.springframework.data.repository.query.ReturnedType;
 import org.springframework.data.repository.query.parser.PartTree;
+import org.springframework.data.util.TypeInformation;
 import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.TypeName;
 import org.springframework.javapoet.TypeSpec;
 import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -144,6 +146,19 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			return null;
 		}
 
+		if (queryMethod.isModifyingQuery()) {
+
+			TypeInformation<?> returnType = repositoryInformation.getReturnType(method);
+
+			boolean returnsCount = JpaCodeBlocks.QueryExecutionBlockBuilder.returnsModifying(returnType.getType());
+
+			boolean isVoid = ClassUtils.isVoidType(returnType.getType());
+
+			if (!returnsCount && !isVoid) {
+				return null;
+			}
+		}
+
 		return MethodContributor.forQueryMethod(queryMethod).contribute(context -> {
 
 			CodeBlock.Builder body = CodeBlock.builder();
@@ -159,8 +174,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			body.add(JpaCodeBlocks.queryBuilder(context, queryMethod).filter(aotQueries)
 					.queryReturnType(getQueryReturnType(aotQueries.result(), returnedType, context)).nativeQuery(nativeQuery)
-					.queryHints(queryHints)
-					.build());
+					.queryHints(queryHints).build());
 
 			body.add(
 					JpaCodeBlocks.executionBuilder(context, queryMethod).modifying(modifying).query(aotQueries.result()).build());
@@ -190,8 +204,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 		UnaryOperator<String> operator = s -> s.replaceAll("#\\{#entityName}", domainType.getName());
 		boolean isNative = query.getBoolean("nativeQuery");
-		Function<String, StringAotQuery> queryFunction = isNative ? StringAotQuery::nativeQuery
-				: StringAotQuery::jpqlQuery;
+		Function<String, StringAotQuery> queryFunction = isNative ? StringAotQuery::nativeQuery : StringAotQuery::jpqlQuery;
 		queryFunction = operator.andThen(queryFunction);
 
 		String queryString = query.getString("value");

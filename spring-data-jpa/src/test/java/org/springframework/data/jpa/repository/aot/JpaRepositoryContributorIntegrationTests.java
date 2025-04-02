@@ -399,9 +399,10 @@ class JpaRepositoryContributorIntegrationTests {
 		assertThat(page.getContent()).extracting(UserDtoProjection::getEmailAddress).containsExactly("han@smuggler.net",
 				"kylo@new-empire.com");
 
-		// TODO
 		Page<UserDtoProjection> noResults = fragment.findUserProjectionByLastnameStartingWith("a",
 				PageRequest.of(0, 2, Sort.by("emailAddress")));
+
+		assertThat(noResults).isEmpty();
 	}
 
 	// modifying
@@ -417,6 +418,13 @@ class JpaRepositoryContributorIntegrationTests {
 				.createQuery("SELECT u FROM %s u WHERE u.emailAddress = 'yoda@jedi.org'".formatted(User.class.getName()))
 				.getSingleResultOrNull();
 		assertThat(yodaShouldBeGone).isNull();
+	}
+
+	@Test
+	void shouldOmitAnnotatedDeleteReturningDomainType() {
+
+		assertThatException().isThrownBy(() -> fragment.deleteAnnotatedQueryByEmailAddress("foo"))
+				.withRootCauseInstanceOf(NoSuchMethodException.class);
 	}
 
 	@Test

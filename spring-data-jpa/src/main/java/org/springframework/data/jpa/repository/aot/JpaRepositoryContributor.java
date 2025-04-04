@@ -90,6 +90,8 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 	@Override
 	protected void customizeConstructor(AotRepositoryConstructorBuilder constructorBuilder) {
 
+		// TODO: BeanFactoryQueryRewriterProvider if there is a method using QueryRewriters.
+
 		constructorBuilder.addParameter("entityManager", EntityManager.class);
 		constructorBuilder.addParameter("context", RepositoryFactoryBeanSupport.FragmentCreationContext.class);
 
@@ -158,7 +160,8 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			body.add(JpaCodeBlocks.queryBuilder(context, queryMethod).filter(aotQueries)
 					.queryReturnType(QueriesFactory.getQueryReturnType(aotQueries.result(), returnedType, context))
-					.nativeQuery(nativeQuery).queryHints(queryHints).entityGraph(aotEntityGraph).build());
+					.nativeQuery(nativeQuery).queryHints(queryHints).entityGraph(aotEntityGraph)
+					.queryRewriter(query.isPresent() ? query.getClass("queryRewriter") : null).build());
 
 			body.add(
 					JpaCodeBlocks.executionBuilder(context, queryMethod).modifying(modifying).query(aotQueries.result()).build());

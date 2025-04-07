@@ -17,12 +17,16 @@ package org.springframework.data.jpa.repository.aot;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.NamedStoredProcedureQuery;
 
 import java.lang.reflect.Method;
+import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.MergedAnnotation;
+import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.data.jpa.provider.PersistenceProvider;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Modifying;
@@ -31,10 +35,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.jpa.repository.query.JpaParameters;
 import org.springframework.data.jpa.repository.query.JpaQueryMethod;
+import org.springframework.data.jpa.repository.query.Procedure;
 import org.springframework.data.jpa.repository.query.QueryEnhancerSelector;
 import org.springframework.data.repository.aot.generate.AotRepositoryConstructorBuilder;
 import org.springframework.data.repository.aot.generate.AotRepositoryFragmentMetadata;
 import org.springframework.data.repository.aot.generate.MethodContributor;
+import org.springframework.data.repository.aot.generate.QueryMetadata;
 import org.springframework.data.repository.aot.generate.RepositoryContributor;
 import org.springframework.data.repository.config.AotRepositoryContext;
 import org.springframework.data.repository.core.RepositoryInformation;
@@ -46,6 +52,7 @@ import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.TypeName;
 import org.springframework.javapoet.TypeSpec;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.StringUtils;
 
 /**
  * JPA-specific {@link RepositoryContributor} contributing an AOT repository fragment using the {@link EntityManager}
@@ -113,20 +120,47 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 		// no stored procedures for now.
 		if (queryMethod.isProcedureQuery()) {
+
+			Procedure procedure = AnnotatedElementUtils.findMergedAnnotation(method, Procedure.class);
+
+			NamedStoredProcedureQuery namedStoredProc = AnnotatedElementUtils.findMergedAnnotation(method,
+					NamedStoredProcedureQuery.class);
+			MethodContributor.QueryMethodMetadataContributorBuilder<JpaQueryMethod> builder = MethodContributor
+					.forQueryMethod(queryMethod);
+
+			if (namedStoredProc != null) {
+				return builder.metadataOnly(new NamedStoredProcedureMetadata(
+						StringUtils.hasText(namedStoredProc.procedureName()) ? namedStoredProc.procedureName()
+								: namedStoredProc.name()));
+
+			}
+			if (procedure != null) {
+				return builder.metadataOnly(new StoredProcedureMetadata(
+						StringUtils.hasText(procedure.procedureName()) ? procedure.procedureName() : procedure.value()));
+			}
+
+			// TODO: Better fallback.
 			return null;
 		}
 
 		ReturnedType returnedType = queryMethod.getResultProcessor().getReturnedType();
 		JpaParameters parameters = queryMethod.getParameters();
 
+		MergedAnnotation<Query> query = MergedAnnotations.from(method).get(Query.class);
+
+		AotQueries aotQueries = queriesFactory.createQueries(repositoryInformation, query, selector, queryMethod,
+				returnedType);
+
 		// no KeysetScrolling for now.
 		if (parameters.hasScrollPositionParameter()) {
-			return null;
+			return MethodContributor.forQueryMethod(queryMethod)
+					.metadataOnly(aotQueries.toMetadata(queryMethod.isPageQuery()));
 		}
 
 		// no dynamic projections.
 		if (parameters.hasDynamicProjection()) {
-			return null;
+			return MethodContributor.forQueryMethod(queryMethod)
+					.metadataOnly(aotQueries.toMetadata(queryMethod.isPageQuery()));
 		}
 
 		if (queryMethod.isModifyingQuery()) {
@@ -138,15 +172,16 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 			boolean isVoid = ClassUtils.isVoidType(returnType.getType());
 
 			if (!returnsCount && !isVoid) {
-				return null;
+				return MethodContributor.forQueryMethod(queryMethod)
+						.metadataOnly(aotQueries.toMetadata(queryMethod.isPageQuery()));
 			}
 		}
 
-		return MethodContributor.forQueryMethod(queryMethod).contribute(context -> {
+		return MethodContributor.forQueryMethod(queryMethod).withMetadata(aotQueries.toMetadata(queryMethod.isPageQuery()))
+				.contribute(context -> {
 
 			CodeBlock.Builder body = CodeBlock.builder();
 
-			MergedAnnotation<Query> query = context.getAnnotation(Query.class);
 			MergedAnnotation<NativeQuery> nativeQuery = context.getAnnotation(NativeQuery.class);
 			MergedAnnotation<QueryHints> queryHints = context.getAnnotation(QueryHints.class);
 			MergedAnnotation<EntityGraph> entityGraph = context.getAnnotation(EntityGraph.class);
@@ -154,7 +189,6 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			body.add(context.codeBlocks().logDebug("invoking [%s]".formatted(context.getMethod().getName())));
 
-			AotQueries aotQueries = queriesFactory.createQueries(context, query, selector, queryMethod, returnedType);
 			AotEntityGraph aotEntityGraph = entityGraphLookup.findEntityGraph(entityGraph, repositoryInformation,
 					returnedType, queryMethod);
 
@@ -168,6 +202,22 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			return body.build();
 		});
+	}
+
+	record StoredProcedureMetadata(String procedure) implements QueryMetadata {
+
+		@Override
+		public Map<String, Object> serialize() {
+			return Map.of("storedProcedure", procedure());
+		}
+	}
+
+	record NamedStoredProcedureMetadata(String procedureName) implements QueryMetadata {
+
+		@Override
+		public Map<String, Object> serialize() {
+			return Map.of("storedProcedureName", procedureName());
+		}
 	}
 
 }

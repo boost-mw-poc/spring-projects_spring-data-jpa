@@ -159,7 +159,7 @@ class QueriesFactory {
 
 		String countProjection = query.isPresent() ? query.getString("countProjection") : null;
 		return AotQueries.from(aotQuery, it -> {
-			return StringAotQuery.of(aotQuery.getQueryString()).getQuery();
+			return StringAotQuery.of(aotQuery.getQuery()).getQuery();
 		}, countProjection, selector);
 	}
 

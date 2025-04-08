@@ -17,7 +17,6 @@ package org.springframework.data.jpa.repository.aot;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.NamedStoredProcedureQuery;
 
 import java.lang.reflect.Method;
 import java.util.Map;
@@ -123,20 +122,23 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 			Procedure procedure = AnnotatedElementUtils.findMergedAnnotation(method, Procedure.class);
 
-			NamedStoredProcedureQuery namedStoredProc = AnnotatedElementUtils.findMergedAnnotation(method,
-					NamedStoredProcedureQuery.class);
 			MethodContributor.QueryMethodMetadataContributorBuilder<JpaQueryMethod> builder = MethodContributor
 					.forQueryMethod(queryMethod);
 
-			if (namedStoredProc != null) {
-				return builder.metadataOnly(new NamedStoredProcedureMetadata(
-						StringUtils.hasText(namedStoredProc.procedureName()) ? namedStoredProc.procedureName()
-								: namedStoredProc.name()));
 
-			}
 			if (procedure != null) {
-				return builder.metadataOnly(new StoredProcedureMetadata(
-						StringUtils.hasText(procedure.procedureName()) ? procedure.procedureName() : procedure.value()));
+
+				if (StringUtils.hasText(procedure.name())) {
+					return builder.metadataOnly(new NamedStoredProcedureMetadata(procedure.name()));
+				}
+
+				if (StringUtils.hasText(procedure.procedureName())) {
+					return builder.metadataOnly(new StoredProcedureMetadata(procedure.procedureName()));
+				}
+
+				if (StringUtils.hasText(procedure.value())) {
+					return builder.metadataOnly(new StoredProcedureMetadata(procedure.value()));
+				}
 			}
 
 			// TODO: Better fallback.
@@ -208,7 +210,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 		@Override
 		public Map<String, Object> serialize() {
-			return Map.of("storedProcedure", procedure());
+			return Map.of("procedure", procedure());
 		}
 	}
 
@@ -216,7 +218,7 @@ public class JpaRepositoryContributor extends RepositoryContributor {
 
 		@Override
 		public Map<String, Object> serialize() {
-			return Map.of("storedProcedureName", procedureName());
+			return Map.of("procedure-name", procedureName());
 		}
 	}
 

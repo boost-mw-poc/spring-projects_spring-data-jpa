@@ -125,7 +125,8 @@ class AotMetamodel implements Metamodel {
 			public List<String> getManagedClassNames() {
 				return persistenceUnitInfo.getManagedClassNames();
 			}
-		}, Map.of("hibernate.dialect", "org.hibernate.dialect.H2Dialect")).build();
+		}, Map.of("hibernate.dialect", "org.hibernate.dialect.H2Dialect", "hibernate.boot.allow_jdbc_metadata_access",
+				"false")).build();
 	}
 
 }
